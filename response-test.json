@@ -1,0 +1,1 @@
+{"answer":"A stack is a data structure that operates on the Last In First Out (LIFO) principle, meaning the most recently added element is the first to be removed.","model":"mimo-v2.5","usage":{"completion_tokens":473,"prompt_tokens":155,"total_tokens":628,"completion_tokens_details":{"reasoning_tokens":437},"prompt_tokens_details":{"cached_tokens":128}}}

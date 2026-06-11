@@ -1,0 +1,25 @@
+{
+  "name": "data-structure-agent",
+  "version": "2.0.0",
+  "description": "数据结构学习陪练台 - 面向课程助教的学习智能体工作台",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node scripts/verify-core-regression.js"
+  },
+  "keywords": ["data-structure", "learning", "agent", "education"],
+  "author": "feng",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "jsonwebtoken": "^9.0.0",
+    "nodemailer": "^6.9.0",
+    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.8.0",
+    "officeparser": "^4.0.0"
+  }
+}

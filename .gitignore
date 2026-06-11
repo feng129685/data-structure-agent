@@ -1,0 +1,61 @@
+# === Secrets & Environment ===
+.env
+.env.*
+!.env.example
+.jwt-secret
+
+# === Database ===
+data.db
+data.db-shm
+data.db-wal
+
+# === Dependencies ===
+node_modules/
+
+# === User Uploads ===
+uploads/
+
+# === Logs ===
+*.log
+
+# === Backup & Temp Files ===
+*.bak
+*.bak-*
+*.backup-*
+*.tmp-*
+*.tar.gz
+prototype.restore-*
+prototype.wip-*
+
+# === Screenshots & Debug Images ===
+*.png
+*.jpg
+*.jpeg
+
+# === Debug & Test Outputs ===
+public-*.html
+public-*.txt
+public-*.json
+public-*.headers.txt
+online-page.tmp.html
+local-root-*.html
+chrome-*.html
+tmp-*/
+tmp-*.html
+audit-current-report.json
+
+# === Server Config (contains IP/infra info) ===
+update-server.sh
+Caddyfile.remote
+
+# === AI Tool Config ===
+.superpowers/
+
+# === OS & Editor ===
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# === Test Output ===
+test-results/
