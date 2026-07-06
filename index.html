@@ -12362,77 +12362,191 @@
       animation: loginSoftRise 300ms cubic-bezier(0.215, 0.61, 0.355, 1) 280ms both;
     }
 
-    .login-hero-visual {
+    /* ===== Animated Characters ===== */
+    .ds-characters {
       position: relative;
-      margin: 34px 0 20px;
-      min-height: 128px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
+      margin: 24px 0 16px;
+      width: 100%;
+      height: 280px;
       z-index: 1;
     }
 
-    .login-node {
-      width: 58px;
-      height: 58px;
-      border-radius: 22px;
-      display: grid;
-      place-items: center;
-      background: rgba(255, 253, 248, 0.1);
-      border: 1px solid rgba(255, 253, 248, 0.2);
-      color: #fffdf8;
-      font-weight: 800;
-      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.16);
-      animation: loginNodeEnter 260ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
-      will-change: transform, opacity;
-    }
-
-    .login-node.top {
-      width: auto;
-      padding: 0 16px;
-      color: #332d28;
-      background: #f5e5d8;
-      border-color: rgba(245, 229, 216, 0.8);
-      animation-delay: 360ms;
-    }
-
-    .login-node.accent {
-      background: #c99a88;
-      border-color: #d7ad9d;
-      color: #2f2824;
-      animation: loginNodeEnter 260ms cubic-bezier(0.215, 0.61, 0.355, 1) 560ms both,
-        loginNodePulse 3400ms cubic-bezier(0.645, 0.045, 0.355, 1) 1100ms infinite;
-    }
-
-    .login-hero-visual .login-node:nth-of-type(3) {
-      animation-delay: 460ms;
-    }
-
-    .login-hero-visual .login-node:nth-of-type(5) {
-      animation-delay: 660ms;
-    }
-
-    .login-link {
-      width: 34px;
-      height: 2px;
-      border-radius: 999px;
-      background: rgba(255, 253, 248, 0.36);
-      position: relative;
-      transform-origin: left center;
-      animation: loginLinkEnter 220ms cubic-bezier(0.215, 0.61, 0.355, 1) 420ms both;
-      will-change: transform, opacity;
-    }
-
-    .login-link::after {
-      content: "";
+    .ds-char {
       position: absolute;
-      right: -1px;
-      top: 50%;
-      width: 8px;
-      height: 8px;
-      border-top: 2px solid rgba(255, 253, 248, 0.42);
-      border-right: 2px solid rgba(255, 253, 248, 0.42);
-      transform: translateY(-50%) rotate(45deg);
+      bottom: 0;
+      transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1), height 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+      transform-origin: bottom center;
+    }
+
+    .ds-purple {
+      left: 20px;
+      width: 110px;
+      height: 240px;
+      background: #6C3FF5;
+      border-radius: 10px 10px 0 0;
+      z-index: 1;
+    }
+
+    .ds-black {
+      left: 130px;
+      width: 75px;
+      height: 190px;
+      background: #2D2D2D;
+      border-radius: 8px 8px 0 0;
+      z-index: 2;
+    }
+
+    .ds-orange {
+      left: 0px;
+      width: 150px;
+      height: 120px;
+      background: #FF9B6B;
+      border-radius: 75px 75px 0 0;
+      z-index: 3;
+    }
+
+    .ds-yellow {
+      left: 190px;
+      width: 90px;
+      height: 145px;
+      background: #E8D754;
+      border-radius: 45px 45px 0 0;
+      z-index: 4;
+    }
+
+    .ds-eyes {
+      position: absolute;
+      display: flex;
+      gap: 14px;
+      transition: left 0.7s cubic-bezier(0.16, 1, 0.3, 1), top 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .ds-purple .ds-eyes {
+      left: 28px;
+      top: 28px;
+      gap: 20px;
+    }
+
+    .ds-black .ds-eyes {
+      left: 16px;
+      top: 22px;
+      gap: 14px;
+    }
+
+    .ds-orange .ds-eyes {
+      left: 48px;
+      top: 50px;
+      gap: 20px;
+    }
+
+    .ds-yellow .ds-eyes {
+      left: 28px;
+      top: 26px;
+      gap: 14px;
+    }
+
+    .ds-eye {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      transition: height 0.15s ease;
+    }
+
+    .ds-purple .ds-eye { width: 20px; height: 20px; }
+    .ds-black .ds-eye { width: 16px; height: 16px; }
+
+    .ds-eye.ds-blink {
+      height: 2px !important;
+    }
+
+    .ds-pupil {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #2D2D2D;
+      transition: transform 0.1s ease-out;
+      flex-shrink: 0;
+    }
+
+    .ds-purple .ds-pupil { width: 8px; height: 8px; }
+    .ds-black .ds-pupil { width: 6px; height: 6px; }
+
+    .ds-pupil.ds-pupil-only {
+      width: 12px;
+      height: 12px;
+    }
+
+    .ds-yellow .ds-pupil.ds-pupil-only { width: 12px; height: 12px; }
+
+    .ds-mouth {
+      position: absolute;
+      width: 50px;
+      height: 4px;
+      background: #2D2D2D;
+      border-radius: 999px;
+      left: 20px;
+      top: 78px;
+      transition: left 0.7s cubic-bezier(0.16, 1, 0.3, 1), top 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Peek animation for purple character */
+    .ds-purple.ds-peek {
+      transform: skewX(-12deg) translateX(30px);
+    }
+
+    .ds-purple.ds-peek .ds-eyes {
+      left: 10px;
+      top: 22px;
+    }
+
+    /* Typing state - characters lean towards each other */
+    .ds-characters.ds-typing .ds-purple {
+      transform: skewX(-12deg) translateX(25px);
+      height: 270px;
+    }
+
+    .ds-characters.ds-typing .ds-purple .ds-eyes {
+      left: 35px;
+      top: 40px;
+    }
+
+    .ds-characters.ds-typing .ds-black {
+      transform: skewX(10deg) translateX(15px);
+    }
+
+    .ds-characters.ds-typing .ds-black .ds-eyes {
+      left: 22px;
+      top: 10px;
+    }
+
+    /* Password visible state - all characters look to the side */
+    .ds-characters.ds-pw-visible .ds-char {
+      transform: skewX(0deg);
+    }
+
+    .ds-characters.ds-pw-visible .ds-purple .ds-eyes {
+      left: 10px;
+      top: 22px;
+    }
+
+    .ds-characters.ds-pw-visible .ds-orange .ds-eyes {
+      left: 30px;
+      top: 50px;
+    }
+
+    .ds-characters.ds-pw-visible .ds-yellow .ds-eyes {
+      left: 15px;
+      top: 26px;
+    }
+
+    .ds-characters.ds-pw-visible .ds-mouth {
+      left: 10px;
+      top: 78px;
     }
 
     .login-hero-tags {
@@ -12851,12 +12965,15 @@
         max-width: none;
       }
 
-      .login-hero-visual {
-        min-height: 86px;
-        margin: 20px 0 12px;
-        overflow-x: auto;
-        padding-bottom: 2px;
+      .ds-characters {
+        height: 180px;
+        margin: 16px 0 10px;
       }
+
+      .ds-purple { width: 80px; height: 170px; left: 10px; }
+      .ds-black { width: 55px; height: 135px; left: 90px; }
+      .ds-orange { width: 110px; height: 85px; left: 0; }
+      .ds-yellow { width: 65px; height: 105px; left: 135px; }
 
       .login-panel {
         padding: 26px 16px 20px;
@@ -12912,8 +13029,9 @@
       .login-hero-badge,
       .login-hero-title,
       .login-hero-text,
-      .login-node,
-      .login-link,
+      .ds-char,
+      .ds-eye,
+      .ds-pupil,
       .login-hero-tags span {
         animation: none !important;
         transform: none !important;
@@ -13796,15 +13914,8 @@
       animation: loginSpotlightDrift 8s cubic-bezier(0.645, 0.045, 0.355, 1) infinite alternate;
     }
 
-    .login-node {
-      transition: transform 180ms cubic-bezier(0.215, 0.61, 0.355, 1), box-shadow 180ms ease;
-    }
-
-    @media (hover: hover) and (pointer: fine) {
-      .login-node:hover {
-        transform: translate3d(0, -3px, 0) rotate(-1deg);
-        box-shadow: 0 18px 34px rgba(0, 0, 0, 0.22);
-      }
+    .ds-char {
+      transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     [data-theme="dark"] body::before {
@@ -16654,12 +16765,36 @@
         <div class="login-hero-badge">DS Agent</div>
         <div class="login-hero-title">把抽象结构讲成看得见的过程</div>
         <div class="login-hero-text">登录后保留你的对话、章节资料和动画演示记录。</div>
-        <div class="login-hero-visual">
-          <div class="login-node top">head</div>
-          <div class="login-link"></div>
-          <div class="login-node">A</div>
-          <div class="login-node accent">B</div>
-          <div class="login-node">C</div>
+        <div class="ds-characters" id="dsCharacters">
+          <!-- Purple tall character -->
+          <div class="ds-char ds-purple" data-char="purple">
+            <div class="ds-eyes">
+              <div class="ds-eye"><div class="ds-pupil"></div></div>
+              <div class="ds-eye"><div class="ds-pupil"></div></div>
+            </div>
+          </div>
+          <!-- Black medium character -->
+          <div class="ds-char ds-black" data-char="black">
+            <div class="ds-eyes">
+              <div class="ds-eye"><div class="ds-pupil"></div></div>
+              <div class="ds-eye"><div class="ds-pupil"></div></div>
+            </div>
+          </div>
+          <!-- Orange half-circle character -->
+          <div class="ds-char ds-orange" data-char="orange">
+            <div class="ds-eyes">
+              <div class="ds-pupil ds-pupil-only"></div>
+              <div class="ds-pupil ds-pupil-only"></div>
+            </div>
+          </div>
+          <!-- Yellow rounded character -->
+          <div class="ds-char ds-yellow" data-char="yellow">
+            <div class="ds-eyes">
+              <div class="ds-pupil ds-pupil-only"></div>
+              <div class="ds-pupil ds-pupil-only"></div>
+            </div>
+            <div class="ds-mouth"></div>
+          </div>
         </div>
         <div class="login-hero-tags">
           <span>链表</span>
@@ -16865,7 +17000,7 @@
         <form class="home-ask-card" id="homePromptForm" aria-label="首页智能体提问框">
           <div class="home-ask-top">
             <span class="home-agent-status">智能体在线</span>
-            <span class="home-model-pill">mimo-v2.5-pro</span>
+            <span class="home-model-pill">deepseek-v4-pro</span>
           </div>
           <label class="visually-hidden" for="homePromptInput">输入你的数据结构问题</label>
           <textarea id="homePromptInput" autocomplete="off" placeholder="例如：链表头插法为什么不能先改 head？栈和队列在做题时怎么快速区分？"></textarea>
@@ -17725,6 +17860,187 @@
     function hideLogin() {
       const overlay = document.getElementById("loginOverlay");
       if (overlay) overlay.classList.add("hidden");
+    }
+
+    /* ===== Animated Login Characters ===== */
+    function initLoginCharacters() {
+      const container = document.getElementById("dsCharacters");
+      if (!container) return;
+
+      const chars = {
+        purple: container.querySelector(".ds-purple"),
+        black: container.querySelector(".ds-black"),
+        orange: container.querySelector(".ds-orange"),
+        yellow: container.querySelector(".ds-yellow"),
+      };
+
+      const allEyes = container.querySelectorAll(".ds-eye");
+      const allPupils = container.querySelectorAll(".ds-pupil");
+
+      let mouseX = 0, mouseY = 0;
+      let isTyping = false;
+      let typingTimer = null;
+      let peekTimer = null;
+
+      // Track mouse position
+      document.addEventListener("mousemove", function (e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+      });
+
+      // Calculate pupil offset based on mouse position relative to element
+      function calcOffset(el, maxDist) {
+        var rect = el.getBoundingClientRect();
+        var cx = rect.left + rect.width / 2;
+        var cy = rect.top + rect.height / 2;
+        var dx = mouseX - cx;
+        var dy = mouseY - cy;
+        var dist = Math.min(Math.sqrt(dx * dx + dy * dy), maxDist);
+        var angle = Math.atan2(dy, dx);
+        return {
+          x: Math.cos(angle) * dist,
+          y: Math.sin(angle) * dist,
+        };
+      }
+
+      // Calculate body skew based on mouse position
+      function calcSkew(el) {
+        var rect = el.getBoundingClientRect();
+        var cx = rect.left + rect.width / 2;
+        var dx = mouseX - cx;
+        return Math.max(-6, Math.min(6, -dx / 120));
+      }
+
+      // Update eye positions each frame
+      function updateEyes() {
+        var containerRect = container.getBoundingClientRect();
+
+        // Only animate if overlay is visible
+        var overlay = document.getElementById("loginOverlay");
+        if (!overlay || overlay.classList.contains("hidden")) {
+          requestAnimationFrame(updateEyes);
+          return;
+        }
+
+        // Update each character's body skew
+        ["purple", "black", "orange", "yellow"].forEach(function (name) {
+          var el = chars[name];
+          if (!el) return;
+          if (!container.classList.contains("ds-typing") && !container.classList.contains("ds-pw-visible") && !el.classList.contains("ds-peek")) {
+            el.style.transform = "skewX(" + calcSkew(el) + "deg)";
+          }
+        });
+
+        // Update pupils
+        container.querySelectorAll(".ds-eye").forEach(function (eye) {
+          var pupil = eye.querySelector(".ds-pupil");
+          if (!pupil) return;
+
+          var isForceLook = container.classList.contains("ds-typing") || container.classList.contains("ds-pw-visible") || eye.closest(".ds-peek");
+          if (isForceLook) return; // CSS handles forced positions
+
+          var maxDist = 5;
+          if (eye.closest(".ds-purple")) maxDist = 5;
+          else if (eye.closest(".ds-black")) maxDist = 4;
+          else maxDist = 5;
+
+          var off = calcOffset(eye, maxDist);
+          pupil.style.transform = "translate(" + off.x + "px, " + off.y + "px)";
+        });
+
+        requestAnimationFrame(updateEyes);
+      }
+
+      requestAnimationFrame(updateEyes);
+
+      // Random blinking
+      function scheduleBlink(eyeEl) {
+        var delay = Math.random() * 4000 + 3000; // 3-7 seconds
+        setTimeout(function () {
+          eyeEl.classList.add("ds-blink");
+          setTimeout(function () {
+            eyeEl.classList.remove("ds-blink");
+            scheduleBlink(eyeEl);
+          }, 150);
+        }, delay);
+      }
+
+      // Schedule blinks for purple and black (they have white eyes)
+      container.querySelectorAll(".ds-purple .ds-eye, .ds-black .ds-eye").forEach(function (eye) {
+        scheduleBlink(eye);
+      });
+
+      // Typing detection - characters look at each other
+      var emailInput = document.getElementById("loginEmail");
+      var passwordInput = document.getElementById("loginPassword");
+
+      function onTypingStart() {
+        if (isTyping) return;
+        isTyping = true;
+        container.classList.add("ds-typing");
+      }
+
+      function onTypingStop() {
+        isTyping = false;
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(function () {
+          container.classList.remove("ds-typing");
+        }, 800);
+      }
+
+      if (emailInput) {
+        emailInput.addEventListener("focus", onTypingStart);
+        emailInput.addEventListener("blur", onTypingStop);
+      }
+      if (passwordInput) {
+        passwordInput.addEventListener("focus", onTypingStart);
+        passwordInput.addEventListener("blur", function () {
+          onTypingStop();
+          container.classList.remove("ds-pw-visible");
+          container.querySelectorAll(".ds-purple").forEach(function (c) { c.classList.remove("ds-peek"); });
+          clearTimeout(peekTimer);
+        });
+        passwordInput.addEventListener("input", function () {
+          checkPeekState();
+        });
+        passwordInput.addEventListener("change", function () {
+          checkPeekState();
+        });
+      }
+
+      function checkPeekState() {
+        if (passwordInput.type === "text" && passwordInput.value.length > 0) {
+          container.classList.add("ds-pw-visible");
+          schedulePeek();
+        } else {
+          container.classList.remove("ds-pw-visible");
+          chars.purple.classList.remove("ds-peek");
+          clearTimeout(peekTimer);
+        }
+      }
+
+      // Peek animation - purple character sneaks a look when password is visible
+      function schedulePeek() {
+        clearTimeout(peekTimer);
+        peekTimer = setTimeout(function () {
+          if (container.classList.contains("ds-pw-visible")) {
+            chars.purple.classList.add("ds-peek");
+            setTimeout(function () {
+              chars.purple.classList.remove("ds-peek");
+              if (container.classList.contains("ds-pw-visible")) {
+                schedulePeek();
+              }
+            }, 800);
+          }
+        }, Math.random() * 3000 + 2000);
+      }
+
+      // Poll password type every 200ms to reliably detect toggle changes
+      var pollTimer = setInterval(function () {
+        var overlay = document.getElementById("loginOverlay");
+        if (!overlay || overlay.classList.contains("hidden")) return;
+        checkPeekState();
+      }, 200);
     }
 
     function initLoginForm() {
@@ -30270,7 +30586,7 @@ ${recentMessages}
       renderPendingAssistant("正在连接模型…");
 
       let reply = "";
-      let sourceLabel = "Mimo + 课程资料";
+            let sourceLabel = "DeepSeek + 课程资料";
       let usedStream = false;
 
       const attData = attachments.map(att => ({
@@ -30305,7 +30621,7 @@ ${recentMessages}
             try {
               const payload = await callModelApi(prompt, attData);
               reply = payload.answer.trim();
-              session.logs.unshift(`[model] ${payload.model || "mimo-v2.5-pro"}`);
+              session.logs.unshift(`[model] ${payload.model || "deepseek-v4-pro"}`);
               if (payload.usage) session.logs.unshift(`[usage] ${JSON.stringify(payload.usage)}`);
             } catch (fallbackError) {
               reply = `${generateReply(prompt, currentScenario())}\n\n提示：线上模型接口暂时不可用，已先使用本地课程规则回答。原因：${fallbackError.message}`;
@@ -33153,6 +33469,7 @@ ${recentMessages}
     (async function initAuth() {
       try {
       initLoginForm();
+      initLoginCharacters();
       bindAuthBadge();
       updateSidebarAvatar();
 

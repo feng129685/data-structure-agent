@@ -20,7 +20,7 @@
 | 后端 | Node.js (>=18) |
 | 数据库 | SQLite (better-sqlite3) |
 | 认证 | JWT (jsonwebtoken) |
-| AI 模型 | MIMO API |
+| AI 模型 | OpenAI-compatible API（当前 DeepSeek） |
 | 文档解析 | pdf-parse, mammoth, officeparser |
 | 邮件通知 | nodemailer |
 | 前端 | 原生 HTML/CSS/JavaScript 单页应用 |
@@ -55,9 +55,10 @@ HOST=127.0.0.1
 PORT=8791
 
 # AI 模型配置
-MIMO_API_KEY=your_api_key_here
-MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/
-MIMO_MODEL=mimo-v2.5-pro
+MODEL_PROVIDER=deepseek
+MODEL_API_KEY=your_api_key_here
+MODEL_BASE_URL=https://api.deepseek.com
+MODEL_NAME=deepseek-v4-pro
 
 # 邮件通知（可选）
 SMTP_HOST=smtp.example.com

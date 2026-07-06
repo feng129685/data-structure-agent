@@ -24,16 +24,17 @@ loadEnvFile();
 
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 8791);
-const MIMO_API_KEY = process.env.MIMO_API_KEY || "";
-function normalizeMimoBaseUrl(value) {
-  const baseUrl = (value || "https://token-plan-cn.xiaomimimo.com/v1").trim().replace(/\/+$/, "");
+const MODEL_API_KEY = process.env.MODEL_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.MIMO_API_KEY || "";
+function normalizeModelBaseUrl(value) {
+  const baseUrl = (value || process.env.DEEPSEEK_BASE_URL || process.env.MIMO_BASE_URL || "https://api.deepseek.com/v1").trim().replace(/\/+$/, "");
   return /\/v\d+$/i.test(baseUrl) ? baseUrl : `${baseUrl}/v1`;
 }
 
-const MIMO_BASE_URL = normalizeMimoBaseUrl(process.env.MIMO_BASE_URL);
-const MIMO_MODEL = process.env.MIMO_MODEL === "mimo-v2.5"
+const MODEL_BASE_URL = normalizeModelBaseUrl(process.env.MODEL_BASE_URL);
+const MODEL_NAME = process.env.MODEL_NAME || process.env.DEEPSEEK_MODEL || (process.env.MIMO_MODEL === "mimo-v2.5"
   ? "mimo-v2.5-pro"
-  : (process.env.MIMO_MODEL || "mimo-v2.5-pro");
+  : (process.env.MIMO_MODEL || "deepseek-v4-pro"));
+const MODEL_PROVIDER = process.env.MODEL_PROVIDER || (MODEL_BASE_URL.includes("deepseek") ? "deepseek" : "openai-compatible");
 
 // Auth & Email
 function loadJwtSecret() {
@@ -984,8 +985,8 @@ function buildMessages(body) {
 
 /* ===== Chat Handler ===== */
 async function handleChat(req, res, preloadedBody = null) {
-  if (!MIMO_API_KEY) {
-    sendJson(res, 500, { error: "服务器未配置 MIMO_API_KEY" });
+  if (!MODEL_API_KEY) {
+    sendJson(res, 500, { error: "服务器未配置模型 API Key" });
     return;
   }
 
@@ -1011,7 +1012,7 @@ async function handleChat(req, res, preloadedBody = null) {
   const isAnimation = body.animation === true;
   const stream = isAnimation ? false : body.stream === true;
   const upstreamBody = {
-    model: MIMO_MODEL,
+    model: MODEL_NAME,
     messages: buildMessages({ ...body, prompt }),
     temperature: isAnimation ? 0.2 : 0.4,
     max_tokens: isAnimation ? 2200 : 1500,
@@ -1019,12 +1020,12 @@ async function handleChat(req, res, preloadedBody = null) {
   };
 
   try {
-    const upstream = await fetch(`${MIMO_BASE_URL}/chat/completions`, {
+    const upstream = await fetch(`${MODEL_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "api-key": MIMO_API_KEY,
-        "authorization": `Bearer ${MIMO_API_KEY}`
+        "api-key": MODEL_API_KEY,
+        "authorization": `Bearer ${MODEL_API_KEY}`
       },
       body: JSON.stringify(upstreamBody)
     });
@@ -1093,13 +1094,13 @@ async function handleChat(req, res, preloadedBody = null) {
         answer,
         animationData,
         animationType: normalizeText(body.animationKind, 40).toLowerCase() || null,
-        model: payload.model || MIMO_MODEL,
+        model: payload.model || MODEL_NAME,
         usage: payload.usage || null
       });
       return;
     }
 
-    sendJson(res, 200, { answer: softenAssistantMarkdown(answer), model: payload.model || MIMO_MODEL, usage: payload.usage || null });
+    sendJson(res, 200, { answer: softenAssistantMarkdown(answer), model: payload.model || MODEL_NAME, usage: payload.usage || null });
   } catch (error) {
     sendJson(res, 502, { error: `模型服务调用失败: ${error.message}` });
   }
@@ -2568,7 +2569,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && pathname === "/healthz") {
       sendJson(res, 200, {
         ok: true,
-        model: MIMO_MODEL,
+        model: MODEL_NAME,
+        modelProvider: MODEL_PROVIDER,
+        modelBaseUrl: MODEL_BASE_URL,
         smtpConfigured: SMTP_CONFIGURED,
         smtpHost: SMTP_HOST || null,
         smtpFrom: SMTP_FROM || null,
