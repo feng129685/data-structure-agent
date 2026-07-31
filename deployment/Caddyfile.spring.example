@@ -1,0 +1,11 @@
+agent.example.com {
+    encode zstd gzip
+
+    handle /api/v1/* {
+        reverse_proxy 127.0.0.1:8792
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:8791
+    }
+}

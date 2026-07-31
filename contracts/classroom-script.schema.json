@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/feng129685/data-structure-agent/contracts/classroom-script.schema.json",
+  "title": "Data Structure Classroom Script",
+  "description": "Reviewed, script-driven classroom content. The script is stored with chapter and review metadata in the classroom_scripts table.",
+  "oneOf": [
+    {"$ref": "#/$defs/stepScript"},
+    {"$ref": "#/$defs/legacyStageScript"}
+  ],
+  "$defs": {
+    "stepScript": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lessonId", "title", "steps"],
+      "properties": {
+        "lessonId": {"type": "string", "minLength": 1, "maxLength": 64},
+        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "objectives": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {"type": "string", "minLength": 1, "maxLength": 160}
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 40,
+          "items": {"$ref": "#/$defs/step"}
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {"type": "string", "enum": ["explain", "question", "discussion", "blackboard", "summary"]},
+        "role": {"type": "string", "enum": ["teacher", "assistant", "student"]},
+        "title": {"type": "string", "maxLength": 200},
+        "content": {"type": "string", "maxLength": 4000},
+        "contentRef": {"type": "string", "minLength": 1, "maxLength": 160},
+        "animationRef": {"type": "string", "minLength": 1, "maxLength": 64},
+        "codeRef": {"type": "string", "minLength": 1, "maxLength": 64},
+        "prompt": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "expected": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        },
+        "misconceptions": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        },
+        "misconceptionFeedback": {
+          "type": "object",
+          "additionalProperties": {"type": "string", "maxLength": 400}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"type": {"const": "question"}},
+            "required": ["type"]
+          },
+          "then": {"required": ["prompt", "expected"]}
+        },
+        {
+          "if": {
+            "properties": {"type": {"const": "explain"}},
+            "required": ["type"]
+          },
+          "then": {
+            "anyOf": [
+              {"required": ["content"]},
+              {"required": ["contentRef"]},
+              {"required": ["animationRef"]},
+              {"required": ["codeRef"]}
+            ]
+          }
+        }
+      ]
+    },
+    "legacyStageScript": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stages"],
+      "properties": {
+        "stages": {
+          "type": "object",
+          "additionalProperties": {"type": "object"}
+        }
+      }
+    }
+  }
+}

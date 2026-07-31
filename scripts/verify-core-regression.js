@@ -6,8 +6,31 @@ const { spawnSync } = require("child_process");
 const root = path.join(__dirname, "..");
 
 const inlineScriptFiles = ["prototype.html", "index.html"];
-const nodeCheckFiles = ["server.js", "scripts/verify-core-regression.js"];
+const nodeCheckFiles = [
+  "server.js",
+  "lib/knowledge-retriever.js",
+  "lib/animation-validator.js",
+  "scripts/verify-core-regression.js",
+  "scripts/verify-knowledge-retrieval.js",
+  "scripts/verify-knowledge-api.js",
+  "scripts/verify-knowledge-chat-context.js",
+  "scripts/verify-security-hardening.js",
+  "scripts/verify-model-stream-errors.js",
+  "scripts/verify-animation-validation.js",
+  "scripts/verify-case-demo-static.js",
+  "scripts/verify-compiler-response-behavior.js",
+  "scripts/execute-security-check.js"
+];
 const verifierScripts = [
+  "scripts/verify-knowledge-retrieval.js",
+  "scripts/verify-knowledge-api.js",
+  "scripts/verify-knowledge-chat-context.js",
+  "scripts/verify-security-hardening.js",
+  "scripts/verify-model-stream-errors.js",
+  "scripts/verify-animation-validation.js",
+  "scripts/verify-case-demo-static.js",
+  "scripts/verify-compiler-response-behavior.js",
+  "scripts/execute-security-check.js",
   "scripts/verify-learning-evidence-checklist-static.js",
   "scripts/verify-learning-snapshot-static.js",
   "scripts/verify-evidence-aware-orchestrator-static.js",

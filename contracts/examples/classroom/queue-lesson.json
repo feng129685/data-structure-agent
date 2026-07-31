@@ -1,0 +1,43 @@
+{
+  "lessonId": "03-stack-queue-queue-01",
+  "title": "队列的先进先出规则",
+  "objectives": [
+    "理解队头与队尾的分工",
+    "能够用先进先出判断出队顺序"
+  ],
+  "steps": [
+    {
+      "type": "explain",
+      "role": "teacher",
+      "contentRef": "03-stack-queue/queue/slide-01",
+      "animationRef": "queue-enqueue-dequeue"
+    },
+    {
+      "type": "question",
+      "role": "teacher",
+      "prompt": "A、B、C 依次入队后，第一次出队的元素是什么？",
+      "expected": ["A"],
+      "misconceptions": ["B", "C"],
+      "misconceptionFeedback": {
+        "B": "B 在 A 之后进入队列，A 还在队头。",
+        "C": "C 最晚入队，它处于队尾而不是队头。"
+      }
+    },
+    {
+      "type": "discussion",
+      "role": "assistant",
+      "content": "请把入队顺序与队头位置对应起来。"
+    },
+    {
+      "type": "blackboard",
+      "role": "teacher",
+      "content": "enqueue 在队尾完成，dequeue 在队头完成。",
+      "animationRef": "queue-enqueue-dequeue"
+    },
+    {
+      "type": "summary",
+      "role": "teacher",
+      "content": "队列先服务最早进入的元素，因此满足先进先出。"
+    }
+  ]
+}

@@ -40,11 +40,14 @@ async function startMockExecutor() {
     const code = String(body.source_code || body.files?.[0]?.content || "");
 
     if (req.url.startsWith("/submissions")) {
+      if (code.includes("JUDGE_HANG")) {
+        return;
+      }
       if (code.includes("HANG")) {
         return;
       }
       if (code.includes("HOLD")) {
-        await sleep(1800);
+        await sleep(600);
       }
       const stdout = code.includes("PRINT_BIG") ? "X".repeat(500) : "ok\n";
       const payload = {
@@ -59,11 +62,11 @@ async function startMockExecutor() {
     }
 
     if (req.url === "/execute") {
-      if (code.includes("HANG")) {
+      if (code.includes("HANG") && !code.includes("JUDGE_HANG")) {
         return;
       }
       if (code.includes("HOLD")) {
-        await sleep(1800);
+        await sleep(600);
       }
       const stdout = code.includes("PRINT_BIG") ? "X".repeat(500) : "ok\n";
       const payload = {
@@ -186,6 +189,14 @@ async function run() {
         const elapsed = Date.now() - startedAt;
         assert.equal(result.status, 504);
         assert.ok(elapsed < 4000, `timeout response too slow: ${elapsed}ms`);
+      }],
+      ["fallback after primary executor timeout", async () => {
+        const headers = { "x-forwarded-for": "10.0.0.15" };
+        const payload = { language: "c", code: "// JUDGE_HANG\nint main(void){return 0;}" };
+        const result = await fetchJson("/api/execute", payload, headers, 4500);
+        assert.equal(result.status, 200);
+        assert.equal(result.json.provider, "piston");
+        assert.match(result.json.warning || "", /Judge0/);
       }],
       ["output truncation", async () => {
         const headers = { "x-forwarded-for": "10.0.0.14" };

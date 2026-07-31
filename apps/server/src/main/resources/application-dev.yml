@@ -1,0 +1,7 @@
+app:
+  security:
+    jwt-secret: ${JWT_SECRET:local-development-only-jwt-secret-change-me}
+  auth:
+    expose-development-code: ${AUTH_EXPOSE_DEV_CODE:true}
+  knowledge:
+    auto-publish-local: ${KNOWLEDGE_AUTO_PUBLISH_LOCAL:true}

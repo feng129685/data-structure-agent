@@ -1,0 +1,903 @@
+openapi: 3.0.3
+info:
+  title: Data Structure Agent API
+  version: 1.0.0
+  description: Spring backend contract for the data structure learning agent.
+servers:
+  - url: /api/v1
+security: []
+tags:
+  - name: Auth
+  - name: Resources
+  - name: Chat
+  - name: Classroom
+  - name: Animation
+  - name: Code
+  - name: Learning
+paths:
+  /auth/request-code:
+    post:
+      tags: [Auth]
+      summary: Request an email verification code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestCodeRequest'
+      responses:
+        '200':
+          description: Generic delivery response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationCodeDelivery'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a verified account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Authenticated account; also sets the HttpOnly session cookie
+          headers:
+            Set-Cookie:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated account; also sets the HttpOnly session cookie
+          headers:
+            Set-Cookie:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Clear the session cookie
+      responses:
+        '204': {description: Session cookie cleared}
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset a password with a reset-purpose verification code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Password updated and a new session issued
+          headers:
+            Set-Cookie:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /users/me:
+    get:
+      tags: [Auth]
+      summary: Read the authenticated account
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /chapters:
+    get:
+      tags: [Resources]
+      summary: List published chapters
+      responses:
+        '200':
+          description: Published chapters in course order
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Chapter'}
+  /chapters/{chapterId}/resources:
+    get:
+      tags: [Resources]
+      summary: List published resources in a chapter
+      description: Returns resources only when both the resource and parent chapter are published and visible to the optional caller. Guests see PUBLIC; signed-in users also see CLASSROOM_ONLY; TEACHER and ADMIN roles also see TEAM_ONLY. Draft chapters return an empty list.
+      security:
+        - {}
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChapterId'
+      responses:
+        '200':
+          description: Published resource metadata
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Resource'}
+  /resources/{resourceId}:
+    get:
+      tags: [Resources]
+      summary: Read published resource metadata
+      description: Applies the same publication and role-based license visibility as the chapter resource list. A resource in a draft chapter or outside the caller's scope returns 404.
+      security:
+        - {}
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: resourceId
+          in: path
+          required: true
+          schema: {type: string, maxLength: 64}
+      responses:
+        '200':
+          description: Published resource
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Resource'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /resources/{resourceId}/content:
+    get:
+      tags: [Resources]
+      summary: Stream an approved resource file without exposing its server path
+      description: Applies the same publication and role-based license visibility as resource metadata. A resource in a draft chapter or outside the caller's scope returns 404.
+      security:
+        - {}
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Resource bytes with a safe inline or attachment Content-Disposition header
+          headers:
+            Content-Disposition:
+              schema: {type: string}
+          content:
+            application/pdf:
+              schema: {type: string, format: binary}
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /chat:
+    post:
+      tags: [Chat]
+      summary: Complete a course-grounded chat turn
+      security:
+        - {}
+        - cookieAuth: []
+        - bearerAuth: []
+      description: Guests are supported but their exchange is not persisted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChatRequest'}
+      responses:
+        '200':
+          description: Assistant answer and reviewed sources
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ChatResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /chat/stream:
+    post:
+      tags: [Chat]
+      summary: Stream a course-grounded chat turn
+      security:
+        - {}
+        - cookieAuth: []
+        - bearerAuth: []
+      description: SSE event names are sources, delta, done, and error.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChatRequest'}
+      responses:
+        '200':
+          description: Server-sent event stream
+          content:
+            text/event-stream:
+              schema: {type: string}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /chat/sessions:
+    get:
+      tags: [Chat]
+      summary: List the authenticated student's persisted chat sessions
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200':
+          description: The 50 most recently active sessions, ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 50
+                items: {$ref: '#/components/schemas/ChatSessionSummary'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /chat/sessions/{sessionId}:
+    get:
+      tags: [Chat]
+      summary: Read one owned chat session and its messages
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/ChatSessionId'
+      responses:
+        '200':
+          description: Owned session with its latest 200 messages in chronological order
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ChatSession'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      tags: [Chat]
+      summary: Delete one owned persisted chat session
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/ChatSessionId'
+      responses:
+        '204': {description: Session deleted}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /classroom/scripts:
+    get:
+      tags: [Classroom]
+      summary: List published classroom scripts
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - name: chapterId
+          in: query
+          schema: {type: string, maxLength: 64}
+      responses:
+        '200':
+          description: Script summaries without full script JSON
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ClassroomScript'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /classroom/sessions:
+    post:
+      tags: [Classroom]
+      summary: Start a classroom session from a published script
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scriptId]
+              properties:
+                scriptId: {type: string}
+      responses:
+        '200':
+          description: New classroom session at OPENING
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ClassroomSession'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /classroom/sessions/{sessionId}:
+    get:
+      tags: [Classroom]
+      summary: Read an owned classroom session
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Current stage only
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ClassroomSession'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /classroom/sessions/{sessionId}/actions:
+    post:
+      tags: [Classroom]
+      summary: Apply an action through the classroom state machine
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [ANSWER, PAUSE, RESUME, CONTINUE, FINISH]
+                content: {type: string, maxLength: 4000}
+      responses:
+        '200':
+          description: Updated classroom session
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ClassroomSession'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /animations/generate:
+    post:
+      tags: [Animation]
+      summary: Generate and validate a structured animation
+      security:
+        - {}
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt: {type: string, maxLength: 2000}
+                preferredType:
+                  type: string
+                  enum: [stack, list, tree, queue, heap, hash, array]
+                chapterId: {type: string, maxLength: 64}
+      responses:
+        '200':
+          description: White-list validated animation definition
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnimationResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+  /animations/{animationId}/observations:
+    post:
+      tags: [Animation]
+      summary: Save an observation for an owned generated animation
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/AnimationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AnimationObservationRequest'}
+      responses:
+        '200':
+          description: Saved observation
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnimationObservation'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /code/runs:
+    post:
+      tags: [Code]
+      summary: Run C or Python through the configured Piston sandbox
+      security:
+        - {}
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CodeRunRequest'}
+      responses:
+        '200':
+          description: Bounded compiler output
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CodeRunResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /code/analyze:
+    post:
+      tags: [Code]
+      summary: Explain submitted code or an owned persisted run without executing it
+      description: |
+        Guests may submit `language` and `code` for an ad-hoc explanation. Signed-in users may instead
+        submit `runId`; the server then loads that user's persisted source code and execution result,
+        ignores client-supplied run fields, and records a server-managed `CODE_REVIEW` learning event.
+        A missing run or a run owned by another user returns 404.
+      security:
+        - {}
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CodeAnalysisRequest'}
+      responses:
+        '200':
+          description: Teaching-oriented analysis
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [analysis]
+                properties:
+                  analysis: {type: string}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+  /learning/progress:
+    get:
+      tags: [Learning]
+      summary: Aggregate owned learning activity by chapter
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200':
+          description: Explainable activity counts, not an opaque score
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LearningProgress'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /learning/events:
+    post:
+      tags: [Learning]
+      summary: Record an authenticated student's reviewed learning activity
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LearningEventRequest'}
+      responses:
+        '201':
+          description: Learning activity recorded
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LearningEvent'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: ds_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ChapterId:
+      name: chapterId
+      in: path
+      required: true
+      schema: {type: string, maxLength: 64}
+    ResourceId:
+      name: resourceId
+      in: path
+      required: true
+      schema: {type: string, maxLength: 64}
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: {type: string, maxLength: 64}
+    ChatSessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: {type: string, maxLength: 64}
+    AnimationId:
+      name: animationId
+      in: path
+      required: true
+      schema: {type: string, maxLength: 64}
+  responses:
+    BadRequest:
+      description: Invalid request
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    Unauthorized:
+      description: Authentication required or credentials invalid
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    NotFound:
+      description: Resource not found or not visible to this user
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    Conflict:
+      description: State conflict
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    PayloadTooLarge:
+      description: Input exceeds configured limit
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    TooManyRequests:
+      description: Rate limit exceeded
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    BadGateway:
+      description: Model or sandbox upstream failed
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    GatewayTimeout:
+      description: Model or sandbox upstream timed out
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+  schemas:
+    ApiError:
+      type: object
+      required: [code, message, requestId, details]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        requestId: {type: string}
+        details:
+          type: array
+          items: {type: string}
+    RequestCodeRequest:
+      type: object
+      required: [email, purpose]
+      properties:
+        email: {type: string, format: email}
+        purpose: {type: string, enum: [register, reset]}
+    VerificationCodeDelivery:
+      type: object
+      required: [message]
+      properties:
+        message: {type: string}
+        developmentCode:
+          type: string
+          nullable: true
+          description: Present only when local development exposure is enabled and mail is disabled.
+    RegisterRequest:
+      type: object
+      required: [email, code, password]
+      properties:
+        email: {type: string, format: email}
+        code: {type: string, minLength: 6, maxLength: 6}
+        password: {type: string, minLength: 8, maxLength: 128}
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, maxLength: 128}
+    ResetPasswordRequest:
+      type: object
+      required: [email, code, password]
+      properties:
+        email: {type: string, format: email}
+        code: {type: string, minLength: 6, maxLength: 6}
+        password: {type: string, minLength: 8, maxLength: 128}
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token: {type: string}
+        user: {$ref: '#/components/schemas/User'}
+    User:
+      type: object
+      required: [id, email, roles]
+      properties:
+        id: {type: integer, format: int64}
+        email: {type: string, format: email}
+        roles:
+          type: array
+          items: {type: string, enum: [STUDENT, TEACHER, ADMIN]}
+    Chapter:
+      type: object
+      required: [id, chapterNumber, title, summary]
+      properties:
+        id: {type: string}
+        chapterNumber: {type: integer}
+        title: {type: string}
+        summary: {type: string}
+    Resource:
+      type: object
+      required: [id, chapterId, type, title, description, sourceName, versionLabel, reviewStatus, licenseScope]
+      properties:
+        id: {type: string}
+        chapterId: {type: string}
+        type: {type: string}
+        title: {type: string}
+        description: {type: string}
+        sourceName: {type: string}
+        versionLabel: {type: string}
+        reviewStatus: {type: string, enum: [PUBLISHED]}
+        licenseScope: {type: string, enum: [PUBLIC, TEAM_ONLY, CLASSROOM_ONLY]}
+        contentUrl:
+          type: string
+          nullable: true
+          description: Stable API URL for the reviewed file; never a server filesystem path.
+    ChatTurn:
+      type: object
+      required: [role, content]
+      properties:
+        role: {type: string, enum: [user, assistant]}
+        content: {type: string, maxLength: 4000}
+    ChatRequest:
+      type: object
+      required: [prompt]
+      properties:
+        prompt: {type: string, maxLength: 4000}
+        chapterId: {type: string, maxLength: 64}
+        sessionId: {type: string, maxLength: 64}
+        history:
+          type: array
+          maxItems: 12
+          items: {$ref: '#/components/schemas/ChatTurn'}
+    ChatSource:
+      type: object
+      required: [id, chapterId, title, content, source, score]
+      properties:
+        id: {type: string}
+        chapterId: {type: string}
+        title: {type: string}
+        content: {type: string, maxLength: 500}
+        source: {type: string}
+        pageLabel: {type: string, nullable: true}
+        score: {type: number, format: double}
+    ChatResponse:
+      type: object
+      required: [answer, sources, persisted]
+      properties:
+        answer: {type: string}
+        sessionId: {type: string, nullable: true}
+        sources:
+          type: array
+          items: {$ref: '#/components/schemas/ChatSource'}
+        persisted: {type: boolean}
+    ChatSessionSummary:
+      type: object
+      required: [id, title, updatedAt, messageCount]
+      properties:
+        id: {type: string}
+        chapterId: {type: string, nullable: true}
+        title: {type: string}
+        updatedAt: {type: string, format: date-time}
+        messageCount: {type: integer, format: int64}
+    ChatMessage:
+      type: object
+      required: [id, role, content, sources, createdAt]
+      properties:
+        id: {type: integer, format: int64}
+        role: {type: string, enum: [user, assistant]}
+        content: {type: string}
+        sources:
+          type: array
+          items: {$ref: '#/components/schemas/ChatSource'}
+        createdAt: {type: string, format: date-time}
+    ChatSession:
+      type: object
+      required: [id, title, updatedAt, messages]
+      properties:
+        id: {type: string}
+        chapterId: {type: string, nullable: true}
+        title: {type: string}
+        updatedAt: {type: string, format: date-time}
+        messages:
+          type: array
+          maxItems: 200
+          description: Latest persisted messages, returned in chronological order
+          items: {$ref: '#/components/schemas/ChatMessage'}
+    ClassroomScript:
+      type: object
+      required: [id, chapterId, title, versionLabel]
+      properties:
+        id: {type: string}
+        chapterId: {type: string}
+        title: {type: string}
+        versionLabel: {type: string}
+    ClassroomSession:
+      type: object
+      required: [id, userId, scriptId, state, paused, stage]
+      properties:
+        id: {type: string}
+        userId: {type: integer, format: int64}
+        scriptId: {type: string}
+        state:
+          type: string
+          enum: [OPENING, EXPLAIN, QUESTION, WAITING, DISCUSS, BLACKBOARD, SUMMARY]
+        paused: {type: boolean}
+        summary: {type: string, nullable: true}
+        stage: {type: object, additionalProperties: true}
+        answerEvaluation:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ClassroomAnswerEvaluation'
+    ClassroomAnswerEvaluation:
+      type: object
+      required: [status, feedback]
+      properties:
+        status: {type: string, enum: [CORRECT, MISCONCEPTION, INCORRECT]}
+        misconception: {type: string, nullable: true}
+        feedback: {type: string}
+    AnimationStep:
+      type: object
+      required: [op, label, note]
+      properties:
+        op: {type: string, maxLength: 32}
+        label: {type: string, maxLength: 48}
+        note: {type: string, maxLength: 240}
+        value:
+          oneOf:
+            - {type: string, maxLength: 48}
+            - {type: number}
+            - {type: boolean}
+            - {type: object, nullable: true, enum: [null]}
+        index: {type: integer, minimum: 0, maximum: 1024, nullable: true}
+        node: {type: integer, minimum: 0, maximum: 64, nullable: true}
+        i: {type: integer, minimum: 0, maximum: 1024, nullable: true}
+        j: {type: integer, minimum: 0, maximum: 1024, nullable: true}
+        key: {type: string, maxLength: 48, nullable: true}
+        val: {type: string, maxLength: 48, nullable: true}
+    AnimationDefinition:
+      type: object
+      required: [animation, type, title, description, initial, steps]
+      properties:
+        animation: {type: boolean, enum: [true]}
+        type: {type: string, enum: [stack, list, tree, queue, heap, hash, array]}
+        title: {type: string, maxLength: 60}
+        description: {type: string, maxLength: 240}
+        initial:
+          type: array
+          maxItems: 64
+          items: {}
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: {$ref: '#/components/schemas/AnimationStep'}
+    AnimationResponse:
+      type: object
+      required: [definition, persisted]
+      properties:
+        definition: {$ref: '#/components/schemas/AnimationDefinition'}
+        recordId: {type: string, nullable: true}
+        persisted: {type: boolean}
+    AnimationObservationRequest:
+      type: object
+      required: [observation]
+      properties:
+        observation: {type: string, minLength: 1, maxLength: 2000}
+    AnimationObservation:
+      type: object
+      required: [recordId, observation]
+      properties:
+        recordId: {type: string}
+        observation: {type: string}
+    CodeRunRequest:
+      type: object
+      required: [language, code]
+      properties:
+        language: {type: string, enum: [c, python]}
+        code: {type: string}
+        stdin: {type: string}
+        chapterId: {type: string, maxLength: 64}
+    CodeRunResponse:
+      type: object
+      required: [language, status, stdout, stderr, durationMs]
+      properties:
+        language: {type: string, enum: [c, python]}
+        status: {type: string, enum: [success, compile_error, runtime_error]}
+        stdout: {type: string}
+        stderr: {type: string}
+        durationMs: {type: integer, format: int64}
+        runId:
+          type: string
+          nullable: true
+          description: Persisted run identifier for a signed-in user; null for a guest run.
+    CodeAnalysisRequest:
+      oneOf:
+        - title: Analyze an owned persisted run
+          type: object
+          required: [runId]
+          properties:
+            runId: {type: string, minLength: 1, maxLength: 64}
+          description: Other run fields may be sent for compatibility but are ignored by the server.
+        - title: Analyze ad-hoc code
+          type: object
+          required: [language, code]
+          properties:
+            runId:
+              type: string
+              nullable: true
+              enum: [null]
+              description: Omit this field or send null for ad-hoc analysis.
+            language: {type: string, enum: [c, python]}
+            code: {type: string}
+            stdin: {type: string}
+            stdout: {type: string}
+            stderr: {type: string}
+            status: {type: string, enum: [success, compile_error, runtime_error, unknown]}
+            chapterId: {type: string, maxLength: 64}
+    ChapterProgress:
+      type: object
+      required:
+        - chapterId
+        - chapterNumber
+        - title
+        - chatCount
+        - classroomCount
+        - animationCount
+        - codeRunCount
+        - eventCount
+        - totalActivities
+      properties:
+        chapterId: {type: string}
+        chapterNumber: {type: integer}
+        title: {type: string}
+        chatCount: {type: integer, format: int64}
+        classroomCount: {type: integer, format: int64}
+        animationCount: {type: integer, format: int64}
+        codeRunCount: {type: integer, format: int64}
+        eventCount: {type: integer, format: int64}
+        totalActivities: {type: integer, format: int64}
+        lastActivityAt: {type: string, format: date-time, nullable: true}
+    LearningProgress:
+      type: object
+      required: [totalActivities, chapters]
+      properties:
+        totalActivities: {type: integer, format: int64}
+        chapters:
+          type: array
+          items: {$ref: '#/components/schemas/ChapterProgress'}
+    LearningEventRequest:
+      type: object
+      required: [eventType]
+      properties:
+        eventType:
+          type: string
+          description: Classroom answers, animation observations, and code reviews are recorded only by their domain endpoints.
+          enum: [RESOURCE_VIEW, RESOURCE_DOWNLOAD, REVIEW_COMPLETED, WEAKNESS_RECORDED]
+        chapterId: {type: string, maxLength: 64, nullable: true}
+        referenceId: {type: string, maxLength: 96, nullable: true}
+        payload: {type: object, additionalProperties: true, nullable: true}
+    LearningEvent:
+      type: object
+      required: [id, eventType, createdAt]
+      properties:
+        id: {type: integer, format: int64}
+        eventType: {type: string}
+        chapterId: {type: string, nullable: true}
+        referenceId: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time}

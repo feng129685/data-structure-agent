@@ -1,0 +1,25 @@
+{
+  "animation": true,
+  "type": "stack",
+  "title": "栈的入栈与出栈",
+  "description": "观察元素如何从栈顶进入和离开，验证后进先出规则。",
+  "initial": ["A", "B"],
+  "steps": [
+    {
+      "op": "push",
+      "label": "压入 C",
+      "note": "新元素 C 进入栈顶。",
+      "value": "C"
+    },
+    {
+      "op": "peek",
+      "label": "查看栈顶",
+      "note": "当前栈顶是最后压入的 C。"
+    },
+    {
+      "op": "pop",
+      "label": "弹出 C",
+      "note": "C 最后进入，却最先离开栈。"
+    }
+  ]
+}

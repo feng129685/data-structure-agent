@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/feng129685/data-structure-agent/contracts/animation.schema.json",
+  "title": "Data Structure Animation Definition",
+  "description": "The validated payload returned by POST /api/v1/animations/generate. The server additionally enforces type-specific operations and value requirements.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["animation", "type", "title", "description", "initial", "steps"],
+  "properties": {
+    "animation": {
+      "const": true,
+      "description": "Marks this response as a renderer-ready animation payload."
+    },
+    "type": {
+      "type": "string",
+      "enum": ["stack", "queue", "list", "tree", "heap", "hash", "array"]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 240
+    },
+    "initial": {
+      "type": "array",
+      "maxItems": 64,
+      "description": "Initial renderer state. Hash animations use buckets; heap animations use finite numbers."
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"type": {"const": "hash"}},
+        "required": ["type"]
+      },
+      "then": {
+        "properties": {
+          "initial": {
+            "maxItems": 16,
+            "items": {"$ref": "#/$defs/hashBucket"}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"type": {"const": "heap"}},
+        "required": ["type"]
+      },
+      "then": {
+        "properties": {
+          "initial": {
+            "items": {"type": "number"}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {"enum": ["stack", "queue", "list", "tree", "array"]}
+        },
+        "required": ["type"]
+      },
+      "then": {
+        "properties": {
+          "initial": {
+            "items": {"$ref": "#/$defs/scalar"}
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "scalar": {
+      "oneOf": [
+        {"type": "string", "maxLength": 48},
+        {"type": "number"},
+        {"type": "boolean"}
+      ]
+    },
+    "hashBucket": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "val"],
+        "properties": {
+          "key": {"type": "string", "minLength": 1, "maxLength": 48},
+          "val": {"type": "string", "minLength": 1, "maxLength": 48}
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "label", "note"],
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "push", "pop", "peek", "enqueue", "dequeue", "append", "insert",
+            "delete", "deleteValue", "find", "visit", "highlight", "extract",
+            "put", "get", "set", "swap"
+          ]
+        },
+        "label": {"type": "string", "minLength": 1, "maxLength": 48},
+        "note": {"type": "string", "minLength": 1, "maxLength": 240},
+        "value": {"$ref": "#/$defs/scalar"},
+        "index": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "node": {"type": "integer", "minimum": 0, "maximum": 64},
+        "i": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "j": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "key": {"type": "string", "maxLength": 48},
+        "val": {"type": "string", "maxLength": 48}
+      }
+    }
+  }
+}

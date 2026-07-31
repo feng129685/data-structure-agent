@@ -1,0 +1,43 @@
+{
+  "lessonId": "03-stack-queue-stack-01",
+  "title": "栈的后进先出规则",
+  "objectives": [
+    "理解栈顶与栈底的含义",
+    "能够用后进先出判断出栈顺序"
+  ],
+  "steps": [
+    {
+      "type": "explain",
+      "role": "teacher",
+      "contentRef": "03-stack-queue/stack/slide-01",
+      "animationRef": "stack-push-pop"
+    },
+    {
+      "type": "question",
+      "role": "teacher",
+      "prompt": "依次将 A、B、C 入栈后，第一次出栈的元素是什么？",
+      "expected": ["C"],
+      "misconceptions": ["A", "B"],
+      "misconceptionFeedback": {
+        "A": "A 最早入栈，不能先出栈。请沿着栈顶重新观察。",
+        "B": "B 位于 A 与 C 之间，C 仍在它的上方。"
+      }
+    },
+    {
+      "type": "discussion",
+      "role": "assistant",
+      "content": "请比较 C 的入栈时间和它到达栈顶的位置。"
+    },
+    {
+      "type": "blackboard",
+      "role": "teacher",
+      "content": "push 和 pop 都发生在同一端，因此栈满足后进先出。",
+      "animationRef": "stack-push-pop"
+    },
+    {
+      "type": "summary",
+      "role": "teacher",
+      "content": "栈只从栈顶插入和删除，最后进入的元素最先离开。"
+    }
+  ]
+}

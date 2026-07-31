@@ -1,0 +1,41 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  prototype:
+    name: Legacy prototype regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  spring-backend:
+    name: Spring backend tests and package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Make Maven wrapper executable
+        working-directory: apps/server
+        run: chmod +x mvnw
+      - name: Run tests
+        working-directory: apps/server
+        run: ./mvnw -B clean test
+      - name: Package application
+        working-directory: apps/server
+        run: ./mvnw -B -DskipTests package

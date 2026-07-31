@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!deployment/.env.spring.example
 .jwt-secret
 
 # === Database ===
@@ -11,9 +12,14 @@ data.db-wal
 
 # === Dependencies ===
 node_modules/
+apps/server/target/
 
 # === User Uploads ===
 uploads/
+
+# === Private Course Knowledge ===
+# Full textbook OCR may be copyrighted and must not be pushed to the public repository.
+knowledge/private/
 
 # === Logs ===
 *.log

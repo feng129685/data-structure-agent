@@ -1,0 +1,85 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - ds-agent-mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - ds-agent
+
+  spring-api:
+    build:
+      context: ../apps/server
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8792
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      TEACHER_EMAILS: ${TEACHER_EMAILS:-}
+      AUTH_COOKIE_SECURE: "true"
+      AUTH_MAIL_ENABLED: "true"
+      AUTH_EXPOSE_DEV_CODE: "false"
+      MODEL_PROVIDER: ${MODEL_PROVIDER}
+      MODEL_API_KEY: ${MODEL_API_KEY}
+      MODEL_BASE_URL: ${MODEL_BASE_URL}
+      MODEL_NAME: ${MODEL_NAME}
+      MODEL_MAX_RESPONSE_BYTES: ${MODEL_MAX_RESPONSE_BYTES:-1048576}
+      KNOWLEDGE_DIR: /app/knowledge
+      KNOWLEDGE_AUTO_PUBLISH_LOCAL: "false"
+      RESOURCE_DIR: /app/resources
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      SMTP_AUTH: "true"
+      SMTP_SSL: ${SMTP_SSL:-true}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      SMTP_STARTTLS_REQUIRED: ${SMTP_STARTTLS_REQUIRED:-${SMTP_STARTTLS:-false}}
+      SMTP_SSL_CHECK_SERVER_IDENTITY: ${SMTP_SSL_CHECK_SERVER_IDENTITY:-true}
+      SMTP_CONNECTION_TIMEOUT_MS: ${SMTP_CONNECTION_TIMEOUT_MS:-5000}
+      SMTP_READ_TIMEOUT_MS: ${SMTP_READ_TIMEOUT_MS:-10000}
+      SMTP_WRITE_TIMEOUT_MS: ${SMTP_WRITE_TIMEOUT_MS:-10000}
+      PISTON_BASE_URL: ${PISTON_BASE_URL}
+      EXECUTE_TIMEOUT: ${EXECUTE_TIMEOUT:-PT15S}
+      EXECUTE_CODE_MAX_LENGTH: ${EXECUTE_CODE_MAX_LENGTH:-20000}
+      EXECUTE_INPUT_MAX_LENGTH: ${EXECUTE_INPUT_MAX_LENGTH:-12000}
+      EXECUTE_OUTPUT_MAX_LENGTH: ${EXECUTE_OUTPUT_MAX_LENGTH:-6000}
+      EXECUTE_MAX_CONCURRENT: ${EXECUTE_MAX_CONCURRENT:-4}
+      EXECUTE_MAX_CONCURRENT_PER_CLIENT: ${EXECUTE_MAX_CONCURRENT_PER_CLIENT:-1}
+      EXECUTE_COMPILE_TIMEOUT_MS: ${EXECUTE_COMPILE_TIMEOUT_MS:-10000}
+      EXECUTE_RUN_TIMEOUT_MS: ${EXECUTE_RUN_TIMEOUT_MS:-3000}
+    volumes:
+      - ../knowledge/private/textbook:/app/knowledge:ro
+      - ../course-content-private:/app/resources:ro
+    ports:
+      - "127.0.0.1:8792:8792"
+    networks:
+      - ds-agent
+
+volumes:
+  ds-agent-mysql:
+
+networks:
+  ds-agent:

@@ -1,0 +1,25 @@
+{
+  "animation": true,
+  "type": "queue",
+  "title": "队列的入队与出队",
+  "description": "观察元素从队尾进入、从队头离开，验证先进先出规则。",
+  "initial": ["A", "B"],
+  "steps": [
+    {
+      "op": "enqueue",
+      "label": "C 从队尾入队",
+      "note": "新元素 C 加入队尾。",
+      "value": "C"
+    },
+    {
+      "op": "peek",
+      "label": "查看队头",
+      "note": "最早入队的 A 仍在队头。"
+    },
+    {
+      "op": "dequeue",
+      "label": "A 从队头出队",
+      "note": "队列总是先移除最早入队的元素。"
+    }
+  ]
+}
