@@ -79,7 +79,9 @@ function main() {
   assert.equal(invalidHeap, null, "heap animation values must stay numeric");
 
   const root = path.join(__dirname, "..");
-  for (const filename of ["index.html", "prototype.html"]) {
+  // The legacy renderer remains available through prototype.html; the Vue
+  // entry is validated by the frontend build and component tests.
+  for (const filename of ["prototype.html"]) {
     const html = fs.readFileSync(path.join(root, "frontend", filename), "utf8");
     assert.match(html, /linked_list: "list"/);
     assert.match(html, /sequential_list: "array"/);

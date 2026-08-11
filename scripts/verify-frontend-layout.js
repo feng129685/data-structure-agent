@@ -51,8 +51,8 @@ async function main() {
   assert.ok(fs.existsSync(legacyPrototypePath), "legacy frontend/prototype.html must be preserved during migration");
   const frontend = fs.readFileSync(frontendPath, "utf8");
   const legacyPrototype = fs.readFileSync(legacyPrototypePath, "utf8");
-  assert.match(frontend, /data-core-module="presentation"/, "canonical frontend must contain the PPT module");
-  assert.match(frontend, /id="classroomView"/, "canonical frontend must contain the classroom module");
+  assert.match(frontend, /<div id="app"><\/div>/, "canonical frontend must expose the Vue mount element");
+  assert.match(frontend, /<script type="module"/, "canonical frontend must include the built Vue entry module");
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ds-frontend-layout-"));
   const port = await getFreePort();
@@ -83,26 +83,32 @@ async function main() {
 
   try {
     await waitForHealth(baseUrl, child, () => stderr);
-    for (const pathname of ["/", "/index.html"]) {
+    for (const pathname of ["/", "/index.html", "/login", "/user/chapters", "/admin/users"]) {
       const response = await fetch(`${baseUrl}${pathname}`);
       assert.equal(response.status, 200, `${pathname} must resolve to the canonical frontend`);
       assert.match(response.headers.get("content-type") || "", /^text\/html/);
       assert.equal(await response.text(), frontend, `${pathname} must not serve a divergent frontend copy`);
     }
-    const headResponse = await fetch(`${baseUrl}/`, { method: "HEAD" });
-    assert.equal(headResponse.status, 200, "HEAD / must provide a lightweight public entry health check");
+    const headResponse = await fetch(`${baseUrl}/user/chapters`, { method: "HEAD" });
+    assert.equal(headResponse.status, 200, "HEAD /user/chapters must provide a lightweight SPA navigation check");
     assert.match(headResponse.headers.get("content-type") || "", /^text\/html/);
     assert.equal((await headResponse.arrayBuffer()).byteLength, 0, "HEAD / must not transfer the frontend body");
     const prototypeResponse = await fetch(`${baseUrl}/prototype.html`);
     assert.equal(prototypeResponse.status, 200, "/prototype.html must preserve the legacy entry during migration");
     assert.equal(await prototypeResponse.text(), legacyPrototype, "/prototype.html must serve frontend/prototype.html");
+    for (const pathname of ["/api/not-a-route", "/presentation/not-found.png", "/pdfs/not-found.pdf", "/vendor/not-found.js", "/unrelated-path"]) {
+      const response = await fetch(`${baseUrl}${pathname}`);
+      assert.equal(response.status, 404, `${pathname} must not be swallowed by the SPA fallback`);
+    }
+    const nonNavigationResponse = await fetch(`${baseUrl}/user/chapters`, { method: "POST" });
+    assert.equal(nonNavigationResponse.status, 404, "POST requests must not be treated as SPA navigation");
   } finally {
     await stopChild(child);
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 
   if (stderr.trim()) process.stderr.write(stderr);
-  console.log("frontend-layout-ok canonical=frontend/index.html legacy=frontend/prototype.html compatibilityEntries=3");
+  console.log("frontend-layout-ok canonical=frontend/index.html legacy=frontend/prototype.html spaHistoryRoutes=5");
 }
 
 main().catch((error) => {

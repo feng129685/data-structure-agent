@@ -95,6 +95,15 @@ const verifierScripts = [
   "scripts/verify-teacher-step-evidence-coverage-static.js"
 ];
 
+const hasVueCanonicalEntry = fs.existsSync(path.join(root, "frontend", "src", "main.ts"));
+const legacyFrontendVerifierScripts = new Set(
+  verifierScripts.filter((script) => script.endsWith("-static.js"))
+);
+legacyFrontendVerifierScripts.add("scripts/verify-animation-record-flow.js");
+const activeVerifierScripts = hasVueCanonicalEntry
+  ? verifierScripts.filter((script) => !legacyFrontendVerifierScripts.has(script))
+  : verifierScripts;
+
 const checks = [];
 
 function rel(filePath) {
@@ -170,9 +179,13 @@ for (const file of nodeCheckFiles) {
   runNode(["--check", file], `node-check ${file}`);
 }
 
-for (const script of verifierScripts) {
+for (const script of activeVerifierScripts) {
   assertFileExists(script);
   runNode([script], rel(script));
+}
+
+if (hasVueCanonicalEntry) {
+  console.log(`legacy-frontend-static-verifiers-skipped count=${verifierScripts.length - activeVerifierScripts.length}`);
 }
 
 console.log(`\ncore-regression-ok checks=${checks.length}`);

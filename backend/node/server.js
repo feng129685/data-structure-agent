@@ -134,6 +134,13 @@ const workspaceFrontendDir = path.join(WORKSPACE_ROOT, "frontend");
 const FRONTEND_DIR = path.resolve(process.env.FRONTEND_DIR || (fs.existsSync(localFrontendDir) ? localFrontendDir : workspaceFrontendDir));
 const INDEX_PATH = path.join(FRONTEND_DIR, "index.html");
 const LOCAL_PROTOTYPE_PATH = path.join(FRONTEND_DIR, "prototype.html");
+const SPA_HISTORY_EXACT_PATHS = new Set([
+  "/login",
+  "/register",
+  "/reset-password",
+  "/403",
+  "/404"
+]);
 const DOMPURIFY_PATH = path.join(path.dirname(require.resolve("dompurify")), "purify.min.js");
 const SECURITY_HEADERS = Object.freeze({
   "content-security-policy": [
@@ -156,6 +163,14 @@ const SECURITY_HEADERS = Object.freeze({
 });
 
 /* ===== Database ===== */
+function isSpaHistoryPath(pathname) {
+  return SPA_HISTORY_EXACT_PATHS.has(pathname)
+    || pathname === "/user"
+    || pathname.startsWith("/user/")
+    || pathname === "/admin"
+    || pathname.startsWith("/admin/");
+}
+
 let db;
 function initDatabase() {
   const Database = require("better-sqlite3");
@@ -3519,6 +3534,11 @@ const server = http.createServer(async (req, res) => {
     // Static files
     if ((req.method === "GET" || req.method === "HEAD") && (pathname === "/" || pathname === "/index.html" || pathname === "/prototype.html")) {
       serveIndex(res, pathname === "/prototype.html" ? LOCAL_PROTOTYPE_PATH : INDEX_PATH, req.method === "HEAD");
+      return;
+    }
+
+    if ((req.method === "GET" || req.method === "HEAD") && isSpaHistoryPath(pathname)) {
+      serveIndex(res, INDEX_PATH, req.method === "HEAD");
       return;
     }
 

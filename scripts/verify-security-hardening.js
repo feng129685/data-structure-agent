@@ -126,8 +126,8 @@ async function main() {
     const html = await rootResponse.text();
     assert.match(rootResponse.headers.get("content-security-policy") || "", /script-src-attr 'none'/);
     assert.equal(rootResponse.headers.get("x-content-type-options"), "nosniff");
-    assert.match(html, /\/vendor\/dompurify\.min\.js/);
-    assert.match(html, /DOMPurify\.sanitize/);
+    assert.match(html, /<div id="app"><\/div>/, "canonical Vue entry must expose the application mount");
+    assert.match(html, /<script type="module"/, "canonical Vue entry must load its module");
     assert.doesNotMatch(html, /\son[a-z]+\s*=/i, "CSP-blocked inline event handlers should not remain");
 
     const healthPayload = await (await fetch(`${baseUrl}/healthz`)).json();
