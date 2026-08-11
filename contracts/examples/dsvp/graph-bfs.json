@@ -1,0 +1,1 @@
+{"version":"1.0","structure":"graph","operation":"bfs","params":{"node":1},"initial_state":{"data":["A","B","C"],"metadata":{"capacity":8}},"source_ref":"example/graph"}

@@ -1,0 +1,122 @@
+# Import this file from the existing host Caddyfile after its global options.
+# It intentionally has no global block, listener declarations, credentials, or
+# unrelated sites, so it can coexist with services already owned by host Caddy.
+
+www.structify.cn {
+    redir https://structify.cn{uri} permanent
+}
+
+(structify_routes) {
+    encode zstd gzip
+
+    log {
+        output stdout
+        format json
+    }
+
+    # HSTS is deliberately omitted until the domain owner confirms every
+    # current and future subdomain is HTTPS-only.
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "same-origin"
+        -Server
+    }
+
+    @cors_actual_public {
+        header Origin https://structify.cn
+        path /api/* /presentation/*
+    }
+    header @cors_actual_public {
+        defer
+        Access-Control-Allow-Origin "https://structify.cn"
+        Access-Control-Allow-Credentials "true"
+        Access-Control-Expose-Headers "X-Request-Id"
+        +Vary "Origin"
+    }
+    @cors_actual_admin {
+        header Origin https://admin.structify.cn
+        path /api/* /presentation/*
+    }
+    header @cors_actual_admin {
+        defer
+        Access-Control-Allow-Origin "https://admin.structify.cn"
+        Access-Control-Allow-Credentials "true"
+        Access-Control-Expose-Headers "X-Request-Id"
+        +Vary "Origin"
+    }
+
+    route {
+        @cors_preflight_public {
+            method OPTIONS
+            header Origin https://structify.cn
+            header Access-Control-Request-Method *
+            path /api/* /presentation/*
+        }
+        handle @cors_preflight_public {
+            header {
+                Access-Control-Allow-Origin "https://structify.cn"
+                Access-Control-Allow-Credentials "true"
+                Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS"
+                Access-Control-Allow-Headers "Authorization, Content-Type, X-Request-Id"
+                Access-Control-Max-Age "3600"
+                Vary "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+            }
+            respond "" 204
+        }
+        @cors_preflight_admin {
+            method OPTIONS
+            header Origin https://admin.structify.cn
+            header Access-Control-Request-Method *
+            path /api/* /presentation/*
+        }
+        handle @cors_preflight_admin {
+            header {
+                Access-Control-Allow-Origin "https://admin.structify.cn"
+                Access-Control-Allow-Credentials "true"
+                Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS"
+                Access-Control-Allow-Headers "Authorization, Content-Type, X-Request-Id"
+                Access-Control-Max-Age "3600"
+                Vary "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+            }
+            respond "" 204
+        }
+
+        @spring_sse path /api/v1/chat/stream
+        handle @spring_sse {
+            reverse_proxy 127.0.0.1:18792 {
+                flush_interval -1
+            }
+        }
+
+        @spring_api path /api/v1/*
+        handle @spring_api {
+            reverse_proxy 127.0.0.1:18792
+        }
+
+        @presentation path /presentation/*
+        handle @presentation {
+            reverse_proxy 127.0.0.1:18791
+        }
+
+        @legacy_api path /api/*
+        handle @legacy_api {
+            reverse_proxy 127.0.0.1:18791 {
+                flush_interval -1
+            }
+        }
+
+        handle {
+            reverse_proxy 127.0.0.1:18791
+        }
+    }
+}
+
+structify.cn {
+    import structify_routes
+}
+
+# The management frontend shares this release bundle. Administrator roles are
+# enforced by Spring on every /api/v1/admin/* request.
+admin.structify.cn {
+    import structify_routes
+}

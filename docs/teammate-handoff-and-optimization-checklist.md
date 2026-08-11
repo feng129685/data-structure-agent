@@ -18,12 +18,12 @@
 
 | 部分 | 位置 | 现在的作用 |
 | --- | --- | --- |
-| Node 兼容层 | 根目录 `server.js` | 现有 `index.html` 直接调用，接口是 `/api/*`，默认端口 `8791`。 |
-| Spring 后端 | `apps/server/` | Java 21 / Spring Boot 的主后端，接口是 `/api/v1/*`，默认端口 `8792`。 |
+| Node 兼容层 | `backend/node/server.js` | `frontend/index.html` 直接调用，接口是 `/api/*`，默认端口 `8791`。 |
+| Spring 后端 | `backend/spring/` | Java 21 / Spring Boot 的主后端，接口是 `/api/v1/*`，默认端口 `8792`。 |
 
 目前前端还没有完整迁移到 Spring。不要只把前端请求里的 `/api/*` 批量改成 `/api/v1/*`，两边的鉴权、返回结构和功能范围并不完全一样。改接口前先看 `contracts/openapi-v1.yaml`，一次只迁移一个完整功能。
 
-`ppt_reader.py` 目前只是一个独立的 PPT 文本提取工具，还不是网站的正式“资料导入”功能。不要直接把它接到线上，除非补齐输入校验、人工审核和导入接口。
+`tools/legacy/ppt_reader.py` 目前只是一个独立的 PPT 文本提取工具，还不是网站的正式“资料导入”功能。不要直接把它接到线上，除非补齐输入校验、人工审核和导入接口。
 
 ## 3. 第一次本地检查
 
@@ -38,7 +38,7 @@ git log -1 --oneline
 再至少读一遍这些说明：
 
 - `README.md`
-- `apps/server/README.md`
+- `backend/spring/README.md`
 - `contracts/README.md`
 - `docs/content-import-guide.md`
 - `.env.example`
@@ -57,7 +57,7 @@ npm start
 Spring 后端：
 
 ```powershell
-cd apps/server
+cd backend/spring
 .\mvnw.cmd clean test
 .\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev
 ```
@@ -153,7 +153,7 @@ git diff --check
 - [ ] 改 Spring 后端后运行：
 
 ```powershell
-cd apps/server
+cd backend/spring
 .\mvnw.cmd clean test
 .\mvnw.cmd -DskipTests package
 ```

@@ -2,10 +2,13 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
+const { waitForCapturedCode } = require("./verification-code-fixture");
 
 const root = path.join(__dirname, "..");
+const nodeRoot = path.join(root, "backend", "node");
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ds-teacher-overview-"));
 const dbPath = path.join(tmpDir, "test.db");
+const verificationCodeFile = path.join(tmpDir, "verification-codes.jsonl");
 const port = 19971 + Math.floor(Math.random() * 1000);
 const baseUrl = `http://127.0.0.1:${port}`;
 const teacherEmail = "teacher@example.com";
@@ -27,17 +30,6 @@ async function waitForServer(child) {
   throw new Error("server did not become ready");
 }
 
-async function waitForDevCode(stdoutRef, email) {
-  const deadline = Date.now() + 8_000;
-  const pattern = new RegExp(`for ${email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: (\\d{6})`);
-  while (Date.now() < deadline) {
-    const match = stdoutRef.value.match(pattern);
-    if (match) return match[1];
-    await wait(150);
-  }
-  throw new Error(`verification code for ${email} was not logged`);
-}
-
 async function jsonFetch(url, options = {}, expectOk = true) {
   const res = await fetch(url, {
     ...options,
@@ -51,12 +43,12 @@ async function jsonFetch(url, options = {}, expectOk = true) {
   return { res, body };
 }
 
-async function register(stdoutRef, email) {
+async function register(email) {
   await jsonFetch(`${baseUrl}/api/auth/request-code`, {
     method: "POST",
     body: JSON.stringify({ email, purpose: "register" })
   });
-  const code = await waitForDevCode(stdoutRef, email);
+  const { code } = await waitForCapturedCode(verificationCodeFile, email);
   const { body } = await jsonFetch(`${baseUrl}/api/auth/register`, {
     method: "POST",
     body: JSON.stringify({ email, password: "test123456", code })
@@ -94,7 +86,7 @@ async function saveSnapshot(token, scenario, topic, percent) {
 
 (async () => {
   const child = spawn(process.execPath, ["server.js"], {
-    cwd: root,
+    cwd: nodeRoot,
     env: {
       ...process.env,
       HOST: "127.0.0.1",
@@ -106,7 +98,9 @@ async function saveSnapshot(token, scenario, topic, percent) {
       SMTP_USER: "",
       SMTP_PASS: "",
       SMTP_FROM: "",
-      TEACHER_EMAILS: teacherEmail
+      TEACHER_EMAILS: teacherEmail,
+      NODE_ENV: "test",
+      VERIFICATION_CODE_FILE: verificationCodeFile
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -118,8 +112,8 @@ async function saveSnapshot(token, scenario, topic, percent) {
 
   try {
     await waitForServer(child);
-    const teacherToken = await register(stdoutRef, teacherEmail);
-    const studentToken = await register(stdoutRef, `student-${Date.now()}@example.com`);
+    const teacherToken = await register(teacherEmail);
+    const studentToken = await register(`student-${Date.now()}@example.com`);
     await saveSnapshot(studentToken, "list", "链表指针顺序", 60);
 
     const denied = await jsonFetch(`${baseUrl}/api/teacher/overview`, {

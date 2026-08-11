@@ -1,0 +1,1 @@
+{"version":"1.0","structure":"sequential_list","operation":"merge","params":{"capacity":8},"initial_state":{"data":[[1,3],[2,4]],"metadata":{"capacity":8}},"source_ref":"example/sequential-list"}

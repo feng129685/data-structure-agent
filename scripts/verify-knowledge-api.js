@@ -6,6 +6,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const root = path.join(__dirname, "..");
+const nodeRoot = path.join(root, "backend", "node");
 
 function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -58,7 +59,7 @@ async function main() {
   const port = await getFreePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, ["server.js"], {
-    cwd: root,
+    cwd: nodeRoot,
     env: {
       ...process.env,
       HOST: "127.0.0.1",

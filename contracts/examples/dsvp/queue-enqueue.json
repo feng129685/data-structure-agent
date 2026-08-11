@@ -1,0 +1,1 @@
+{"version":"1.0","structure":"queue","operation":"enqueue","params":{"value":"C","capacity":8},"initial_state":{"data":["A","B"],"metadata":{"capacity":8}},"source_ref":"example/queue"}

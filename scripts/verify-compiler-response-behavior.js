@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const html = fs.readFileSync(path.join(__dirname, "..", "prototype.html"), "utf8");
+const html = fs.readFileSync(path.join(__dirname, "..", "frontend", "prototype.html"), "utf8");
 const start = html.indexOf("async function readApiJsonResponse");
 const end = html.indexOf("function setCompilerOutput", start);
 

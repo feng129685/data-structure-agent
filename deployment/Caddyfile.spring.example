@@ -1,11 +1,55 @@
-agent.example.com {
+{
+    email {$ACME_EMAIL}
+    admin off
+}
+
+# Historical direct-host variant. For a shared host, use
+# Caddyfile.host.production as an imported site block instead. Both
+# applications use Structify's dedicated loopback ports.
+www.structify.cn {
+    redir https://structify.cn{uri} permanent
+}
+
+(structify_routes) {
     encode zstd gzip
 
-    handle /api/v1/* {
-        reverse_proxy 127.0.0.1:8792
-    }
+    route {
+        @spring_sse path /api/v1/chat/stream
+        handle @spring_sse {
+            reverse_proxy 127.0.0.1:18792 {
+                flush_interval -1
+            }
+        }
 
-    handle {
-        reverse_proxy 127.0.0.1:8791
+        @spring_api path /api/v1/*
+        handle @spring_api {
+            reverse_proxy 127.0.0.1:18792
+        }
+
+        @presentation path /presentation/*
+        handle @presentation {
+            reverse_proxy 127.0.0.1:18791
+        }
+
+        @legacy_api path /api/*
+        handle @legacy_api {
+            reverse_proxy 127.0.0.1:18791 {
+                flush_interval -1
+            }
+        }
+
+        handle {
+            reverse_proxy 127.0.0.1:18791
+        }
     }
+}
+
+structify.cn {
+    import structify_routes
+}
+
+# This transition topology keeps the management domain on the same Node/Spring
+# proxy pair. Spring performs the actual administrator authorization.
+admin.structify.cn {
+    import structify_routes
 }

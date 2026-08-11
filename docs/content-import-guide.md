@@ -7,7 +7,7 @@
 教材 OCR、教师 PPT、受限 PDF、原始录屏和授权证明都放在团队私有目录或私有仓库，不能提交到公开 GitHub：
 
 ```text
-course-content-private/
+private/course-content/
   chapters/
     03-stack-queue/
       slides/
@@ -102,7 +102,7 @@ ON DUPLICATE KEY UPDATE
 先验证脚本 JSON，再导入：
 
 ```powershell
-cd apps/server
+cd backend/spring
 .\mvnw.cmd "-Dtest=ContractExampleCompatibilityTest,ClassroomScriptParserTest" test
 ```
 

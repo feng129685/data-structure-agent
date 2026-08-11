@@ -2,11 +2,11 @@
   "name": "data-structure-agent",
   "version": "2.0.0",
   "description": "数据结构学习陪练台 - 面向课程助教的学习智能体工作台",
-  "main": "server.js",
+  "main": "backend/node/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "test": "node scripts/verify-core-regression.js"
+    "start": "node backend/node/server.js",
+    "dev": "node --watch backend/node/server.js",
+    "test": "node scripts/verify-backend-layout.js && node scripts/verify-core-regression.js"
   },
   "keywords": [
     "data-structure",
@@ -21,15 +21,21 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
-    "dompurify": "^3.4.12",
+    "busboy": "^1.6.0",
+    "dompurify": "^3.4.13",
     "jsonwebtoken": "^9.0.0",
     "mammoth": "^1.8.0",
-    "nodemailer": "^9.0.3",
-    "officeparser": "^7.3.0",
+    "nodemailer": "^9.0.5",
+    "officeparser": "^7.5.1",
     "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
     "docx": "^9.7.1",
     "sharp": "^0.35.3"
+  },
+  "overrides": {
+    "officeparser": {
+      "pdfjs-dist": "6.2.108"
+    }
   }
 }

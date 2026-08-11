@@ -1,0 +1,27 @@
+ARG NODE_BASE_IMAGE=node:22-bookworm-slim
+FROM ${NODE_BASE_IMAGE} AS dependencies
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts=false \
+    && npm cache clean --force
+
+FROM ${NODE_BASE_IMAGE}
+
+ENV NODE_ENV=production
+WORKDIR /app
+
+COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
+COPY --chown=node:node package.json package-lock.json ./
+COPY --chown=node:node backend/node ./backend/node
+COPY --chown=node:node frontend ./frontend
+COPY --chown=node:node deployment/node-entrypoint.sh /usr/local/bin/node-entrypoint
+RUN mkdir -p /app/default-pdfs /app/pdfs /app/data \
+    && chmod 755 /usr/local/bin/node-entrypoint /app/default-pdfs \
+    && chown -R node:node /app/default-pdfs /app/pdfs /app/data
+
+USER node
+EXPOSE 8791
+
+ENTRYPOINT ["/usr/local/bin/node-entrypoint"]
+CMD ["node", "backend/node/server.js"]

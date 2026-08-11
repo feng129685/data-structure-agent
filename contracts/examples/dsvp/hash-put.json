@@ -1,0 +1,1 @@
+{"version":"1.0","structure":"hash","operation":"put","params":{"key":"a","val":"1","capacity":8},"initial_state":{"data":[[],[]],"metadata":{"capacity":8}},"source_ref":"example/hash"}

@@ -5,15 +5,19 @@ info:
   description: Spring backend contract for the data structure learning agent.
 servers:
   - url: /api/v1
+    description: Relative base; usable from structify.cn and admin.structify.cn. Admin routes still require a database-backed ADMIN role.
 security: []
 tags:
   - name: Auth
   - name: Resources
+  - name: Knowledge
   - name: Chat
   - name: Classroom
   - name: Animation
   - name: Code
   - name: Learning
+  - name: AI
+  - name: Admin
 paths:
   /auth/request-code:
     post:
@@ -194,15 +198,73 @@ paths:
             application/octet-stream:
               schema: {type: string, format: binary}
         '404': {$ref: '#/components/responses/NotFound'}
-  /chat:
-    post:
-      tags: [Chat]
-      summary: Complete a course-grounded chat turn
+  /knowledge/search:
+    get:
+      tags: [Knowledge]
+      summary: Search reviewed, audience-visible knowledge
+      description: >
+        Guest-compatible read-only retrieval. Only knowledge chunks with
+        `PUBLISHED` review status and a published parent chapter/resource are
+        indexed. Guests see `PUBLIC`; authenticated students see
+        `PUBLIC` and `CLASSROOM_ONLY`; `TEACHER` and `ADMIN` also see
+        `TEAM_ONLY`. The server normalizes whitespace, requires a non-blank
+        query of at most 500 characters, and accepts an optional chapter
+        filter of at most 64 characters. `limit` defaults to 4 when omitted or
+        blank; numeric values are bounded to 1 through 6. A non-numeric
+        `limit` is rejected with HTTP 400 and code `KNOWLEDGE_LIMIT_INVALID`,
+        never silently coerced. Results are relevance-ranked, deduplicated by source,
+        and contain excerpts only; this endpoint never returns draft or
+        unreviewed material and does not generate an answer. Missing or blank
+        `q` returns `KNOWLEDGE_QUERY_REQUIRED`; a query over 500 characters
+        returns `KNOWLEDGE_QUERY_TOO_LONG`; and a `chapterId` over 64
+        characters returns `KNOWLEDGE_CHAPTER_TOO_LONG`. A valid query with
+        no eligible match (including an unknown/unpublished chapter) returns
+        `200` with an empty `results` array; prompt-injection-shaped queries
+        are also excluded from retrieval and return an empty result list.
       security:
         - {}
         - cookieAuth: []
         - bearerAuth: []
-      description: Guests are supported but their exchange is not persisted.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search text after trimming and whitespace normalization.
+          schema: {type: string, minLength: 1, maxLength: 500}
+        - name: chapterId
+          in: query
+          required: false
+          description: Optional published chapter identifier to scope retrieval.
+          schema: {type: string, maxLength: 64}
+        - name: limit
+          in: query
+          required: false
+          description: Result count hint. Omitted or blank values default to 4; numeric values below 1 are raised to 1 and values above 6 are reduced to 6. Non-numeric values return HTTP 400 with code KNOWLEDGE_LIMIT_INVALID.
+          schema: {type: integer, format: int32, default: 4}
+      responses:
+        '200':
+          description: Relevance-ranked reviewed knowledge results
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/KnowledgeSearchResponse'}
+        '400':
+          description: Invalid query, chapter filter, or result-count parameter
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApiError'}
+              examples:
+                invalidLimit:
+                  value:
+                    code: KNOWLEDGE_LIMIT_INVALID
+                    message: 返回数量参数无效
+                    requestId: request-id
+                    details: []
+  /chat:
+    post:
+      tags: [Chat]
+      summary: Complete a course-grounded chat turn
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      description: Formal course-grounded generation requires an authenticated active user, published authorized evidence, and an enabled model with an available daily token quota. The request is metered through an idempotent reservation and settled with provider usage when available, otherwise the reservation estimate.
       requestBody:
         required: true
         content:
@@ -215,18 +277,18 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/ChatResponse'}
         '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409': {$ref: '#/components/responses/Conflict'}
         '429': {$ref: '#/components/responses/TooManyRequests'}
         '502': {$ref: '#/components/responses/BadGateway'}
         '504': {$ref: '#/components/responses/GatewayTimeout'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
   /chat/stream:
     post:
       tags: [Chat]
       summary: Stream a course-grounded chat turn
-      security:
-        - {}
-        - cookieAuth: []
-        - bearerAuth: []
-      description: SSE event names are sources, delta, done, and error.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      description: Formal generation requires an authenticated active user and the same published-evidence and quota gate as POST /chat. After the request is accepted, the response is an SSE stream with named sources, delta, done, and error events. The server releases the reservation and concurrency slot when the upstream fails, the stream times out, or the client disconnects.
       requestBody:
         required: true
         content:
@@ -239,7 +301,12 @@ paths:
             text/event-stream:
               schema: {type: string}
         '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409': {$ref: '#/components/responses/Conflict'}
         '429': {$ref: '#/components/responses/TooManyRequests'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
   /chat/sessions:
     get:
       tags: [Chat]
@@ -365,10 +432,11 @@ paths:
     post:
       tags: [Animation]
       summary: Generate and validate a structured animation
-      security:
-        - {}
-        - cookieAuth: []
-        - bearerAuth: []
+      description: >-
+        Formal model generation requires an authenticated active user and the server-side
+        model configuration and token-quota gate. The response is validated against the
+        animation whitelist before it can be persisted as learning evidence.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
       requestBody:
         required: true
         content:
@@ -389,8 +457,34 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/AnimationResponse'}
         '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
         '429': {$ref: '#/components/responses/TooManyRequests'}
         '502': {$ref: '#/components/responses/BadGateway'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /animations/simulate:
+    post:
+      tags: [Animation]
+      summary: Validate and adapt a deterministic DSVP request
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DsvpRequest'}
+      responses:
+        '200':
+          description: DSVP trace plus renderer-compatible animation data
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DsvpSimulationResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
   /animations/{animationId}/observations:
     post:
       tags: [Animation]
@@ -441,14 +535,13 @@ paths:
       tags: [Code]
       summary: Explain submitted code or an owned persisted run without executing it
       description: |
-        Guests may submit `language` and `code` for an ad-hoc explanation. Signed-in users may instead
+        An authenticated active user may submit `language` and `code` for an ad-hoc explanation or
         submit `runId`; the server then loads that user's persisted source code and execution result,
         ignores client-supplied run fields, and records a server-managed `CODE_REVIEW` learning event.
+        Formal model analysis uses the same server-side model configuration and token-quota gate as
+        other AI generation endpoints.
         A missing run or a run owned by another user returns 404.
-      security:
-        - {}
-        - cookieAuth: []
-        - bearerAuth: []
+      security: [{cookieAuth: []}, {bearerAuth: []}]
       requestBody:
         required: true
         content:
@@ -466,9 +559,12 @@ paths:
                   analysis: {type: string}
         '400': {$ref: '#/components/responses/BadRequest'}
         '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
         '429': {$ref: '#/components/responses/TooManyRequests'}
         '404': {$ref: '#/components/responses/NotFound'}
         '502': {$ref: '#/components/responses/BadGateway'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
   /learning/progress:
     get:
       tags: [Learning]
@@ -500,6 +596,451 @@ paths:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '413': {$ref: '#/components/responses/PayloadTooLarge'}
+  /ai/readiness:
+    get:
+      tags: [AI]
+      summary: Return authenticated generation readiness without calling a model
+      description: >-
+        The result is derived from the current server-side model configuration and only
+        published, authorized evidence. `operation` defaults to `CHAT`; `CHAT`
+        requires eligible evidence, while `CODE_ANALYSIS` and
+        `ANIMATION_GENERATION` do not. A false allowFormalGeneration value must be
+        treated as a hard server-side generation gate. Unsupported operation values
+        return HTTP 400 with code `AI_READINESS_OPERATION_INVALID`.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - name: operation
+          in: query
+          required: false
+          description: Canonical generation operation. The server normalizes case and hyphen spelling before validation.
+          schema: {type: string, maxLength: 64, enum: [CHAT, CODE_ANALYSIS, ANIMATION_GENERATION], default: CHAT}
+        - name: chapterId
+          in: query
+          required: false
+          schema: {type: string, maxLength: 64}
+        - name: prompt
+          in: query
+          required: false
+          schema: {type: string, maxLength: 4000}
+      responses:
+        '200':
+          description: Current readiness and non-sensitive blocking reasons
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiReadiness'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /admin/capabilities:
+    get:
+      tags: [Admin]
+      summary: Return the current administrator's available management modules
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200':
+          description: Capability map based on the current database role
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminCapability'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: Search and paginate users without credentials or private content
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+        - name: search
+          in: query
+          required: false
+          schema: {type: string, maxLength: 128}
+        - name: status
+          in: query
+          required: false
+          schema: {type: string, enum: [ACTIVE, DISABLED]}
+        - name: role
+          in: query
+          required: false
+          schema: {type: string, enum: [STUDENT, TEACHER, ADMIN]}
+      responses:
+        '200':
+          description: User page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUserPage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /admin/users/{id}:
+    get:
+      tags: [Admin]
+      summary: Return a safe administrator view of one user
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/AdminUserId'}
+      responses:
+        '200':
+          description: User detail without password hashes, verification codes, tokens, or private resources
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUser'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /admin/users/{id}/status:
+    patch:
+      tags: [Admin]
+      summary: Enable or disable a user and create an audit event
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/AdminUserId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AdminUserStatusRequest'}
+      responses:
+        '200':
+          description: Updated user state
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUser'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /admin/users/{id}/roles:
+    patch:
+      tags: [Admin]
+      summary: Replace a user's role set under server-side safeguards and audit it
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/AdminUserId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AdminUserRolesRequest'}
+      responses:
+        '200':
+          description: Updated role set
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUser'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /admin/audit-events:
+    get:
+      tags: [Admin]
+      summary: Query non-sensitive administrator audit events
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Page'}
+        - name: size
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+        - name: actorUserId
+          in: query
+          required: false
+          schema: {type: integer, format: int64, minimum: 1}
+        - name: action
+          in: query
+          required: false
+          schema: {type: string, maxLength: 64}
+        - name: targetType
+          in: query
+          required: false
+          schema: {type: string, maxLength: 64}
+        - name: targetId
+          in: query
+          required: false
+          schema: {type: string, maxLength: 160}
+        - name: from
+          in: query
+          required: false
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          required: false
+          schema: {type: string, format: date-time}
+      responses:
+        '200':
+          description: Audit event page with request IDs and state summaries only
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminAuditEventPage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /admin/background-tasks:
+    get:
+      tags: [Admin]
+      summary: List durable background task records
+      description: >-
+        The current writable task surface supports only `STALE_TASK_RECOVERY`.
+        The ledger may still expose pre-existing records with another well-formed
+        type, but retry and cancel reject them.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+        - name: status
+          in: query
+          required: false
+          schema: {type: string, enum: [PENDING, RUNNING, SUCCEEDED, FAILED, CANCELED]}
+        - name: taskType
+          in: query
+          required: false
+          description: Filter a stored task type. `STALE_TASK_RECOVERY` is the only currently submitted and executable task type.
+          schema: {type: string, pattern: '^[A-Za-z0-9_.-]{1,64}$'}
+      responses:
+        '200':
+          description: Task ledger page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BackgroundTaskPage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /admin/background-tasks/{id}:
+    get:
+      tags: [Admin]
+      summary: Return one durable background task record
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/BackgroundTaskId'}
+      responses:
+        '200':
+          description: Task lifecycle, deadline, failure, retry, and request metadata
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BackgroundTask'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /admin/background-tasks/recover-timeouts:
+    post:
+      tags: [Admin]
+      summary: Submit the only supported timeout-recovery task and return its durable record
+      description: Creates a `STALE_TASK_RECOVERY` task. It marks expired pending or running work as failed; terminal success reports the affected count in `resultCount`.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '202':
+          description: Recovery submitted for asynchronous execution; terminal success records the recovered task count
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BackgroundTask'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /admin/background-tasks/{id}/retry:
+    post:
+      tags: [Admin]
+      summary: Retry an eligible failed stale-task-recovery record
+      description: Only a failed `STALE_TASK_RECOVERY` record below its attempt limit can be retried. Other task types return HTTP 409.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/BackgroundTaskId'}
+      responses:
+        '202':
+          description: Retry submitted for asynchronous execution
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BackgroundTask'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /admin/background-tasks/{id}/cancel:
+    post:
+      tags: [Admin]
+      summary: Cancel a pending stale-task-recovery record
+      description: Only a pending `STALE_TASK_RECOVERY` record can be canceled. Other task types return HTTP 409.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/BackgroundTaskId'}
+      responses:
+        '200':
+          description: Canceled task record
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BackgroundTask'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /admin/reviews:
+    get:
+      tags: [Admin]
+      summary: List reviewable learning resources and evidence
+      description: >-
+        The review domain contains only `RESOURCE`, `KNOWLEDGE_CHUNK`,
+        `PRESENTATION_MANIFEST`, `PRESENTATION_PAGE`, and
+        `DSVP_REQUEST_SNAPSHOT`. DSVP snapshots are reviewable only when
+        `source_type=PPT` and their source reference resolves through a
+        presentation page and manifest. Classroom scripts, animation
+        observations, and non-PPT DSVP snapshots are outside this review and
+        VERIFIED domain.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+        - name: type
+          in: query
+          required: false
+          description: A comma-separated subset of ReviewType values
+          schema: {type: string, maxLength: 256}
+        - name: status
+          in: query
+          required: false
+          schema: {$ref: '#/components/schemas/ReviewStatus'}
+        - name: search
+          in: query
+          required: false
+          schema: {type: string, maxLength: 160}
+      responses:
+        '200':
+          description: Review queue page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReviewItemPage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /admin/reviews/{type}/{id}:
+    get:
+      tags: [Admin]
+      summary: Return one review item with its safe source chain
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/ReviewType'}
+        - {$ref: '#/components/parameters/ReviewId'}
+      responses:
+        '200':
+          description: Review item and safe source-chain metadata
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReviewDetail'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /admin/reviews/{type}/{id}/status:
+    patch:
+      tags: [Admin]
+      summary: Change review status and audit the transition
+      description: A VERIFIED transition is rejected when its source chain is not complete and published.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/ReviewType'}
+        - {$ref: '#/components/parameters/ReviewId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReviewStatusRequest'}
+      responses:
+        '200':
+          description: Updated review item
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReviewItem'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /admin/reviews/{type}/{id}/history:
+    get:
+      tags: [Admin]
+      summary: Return the status history for a review item
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/ReviewType'}
+        - {$ref: '#/components/parameters/ReviewId'}
+      responses:
+        '200':
+          description: Transition history with reviewer and request ID
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ReviewHistoryEvent'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /admin/model-config:
+    get:
+      tags: [Admin]
+      summary: Read provider-neutral model configuration capability without a credential
+      description: >-
+        `available` represents generation eligibility, not merely whether a saved
+        encrypted credential can be read. A readable configuration can therefore be
+        returned with `available=false` when it is disabled or has no positive daily
+        quota.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200':
+          description: Module availability and a credential-free configuration view
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ModelConfigCapability'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    put:
+      tags: [Admin]
+      summary: Save provider-neutral model controls and audit the change
+      description: >-
+        apiKey is accepted only by this write endpoint. It is encrypted at rest and is
+        never returned. A provider or base URL change requires a newly supplied key.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateModelConfigRequest'}
+      responses:
+        '200':
+          description: Safe persisted configuration view
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ModelConfig'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /admin/model-config/test:
+    post:
+      tags: [Admin]
+      summary: Test the saved model connection under SSRF and redirect safeguards
+      description: >-
+        Uses the saved configuration and sends no caller-supplied body. The service
+        makes a pinned HTTPS `POST` to the resolved base URL plus
+        `/chat/completions`, with an OpenAI-compatible JSON request containing the
+        saved model, one `Connection test` user message, `max_tokens: 1`,
+        `temperature: 0`, and `stream: false`. A 2xx response succeeds only when it
+        contains a non-blank `choices[0].message.content`; another 2xx response
+        yields `CONNECTION_RESPONSE_INVALID`. Redirects are rejected and never
+        followed. The persisted result and timestamp are diagnostic history only;
+        they do not make a model available and are not consulted as a generation
+        readiness gate.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200':
+          description: Non-sensitive connection result; a false result does not expose upstream details
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ModelConfigConnectionTest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
 components:
   securitySchemes:
     cookieAuth:
@@ -511,6 +1052,38 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: {type: integer, minimum: 0, default: 0}
+    PageSize:
+      name: size
+      in: query
+      required: false
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+    AdminUserId:
+      name: id
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    BackgroundTaskId:
+      name: id
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    ReviewType:
+      name: type
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [RESOURCE, KNOWLEDGE_CHUNK, PRESENTATION_MANIFEST, PRESENTATION_PAGE, DSVP_REQUEST_SNAPSHOT]
+    ReviewId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 160}
     ChapterId:
       name: chapterId
       in: path
@@ -543,6 +1116,9 @@ components:
     Unauthorized:
       description: Authentication required or credentials invalid
       content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    Forbidden:
+      description: Authenticated user cannot access the requested source
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
     NotFound:
       description: Resource not found or not visible to this user
       content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
@@ -560,6 +1136,12 @@ components:
       content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
     GatewayTimeout:
       description: Model or sandbox upstream timed out
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    ServiceUnavailable:
+      description: A required local configuration or controlled dependency is unavailable
+      content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
+    InternalServerError:
+      description: Local evidence persistence failed and the transaction was rolled back
       content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}
   schemas:
     ApiError:
@@ -582,11 +1164,9 @@ components:
       type: object
       required: [message]
       properties:
-        message: {type: string}
-        developmentCode:
+        message:
           type: string
-          nullable: true
-          description: Present only when local development exposure is enabled and mail is disabled.
+          description: Generic response. The verification code is delivered out of band and is never returned by HTTP.
     RegisterRequest:
       type: object
       required: [email, code, password]
@@ -647,6 +1227,55 @@ components:
           type: string
           nullable: true
           description: Stable API URL for the reviewed file; never a server filesystem path.
+    KnowledgeSearchResponse:
+      type: object
+      required: [ok, query, results]
+      properties:
+        ok: {type: boolean, enum: [true]}
+        query: {type: string, maxLength: 500}
+        results:
+          type: array
+          maxItems: 6
+          items: {$ref: '#/components/schemas/KnowledgeSearchResult'}
+    KnowledgeSearchResult:
+      type: object
+      required:
+        - id
+        - chapterId
+        - title
+        - lessonNumber
+        - kind
+        - source
+        - pageLabel
+        - sourceLabel
+        - locationLabel
+        - reviewStatus
+        - publicationStatus
+        - excerpt
+        - score
+      properties:
+        id: {type: string}
+        chapterId: {type: string, nullable: true}
+        title: {type: string}
+        lessonNumber:
+          type: string
+          nullable: true
+          description: Compatibility alias of chapterId in the current adapter.
+        kind: {type: string, enum: [answer, textbook]}
+        source:
+          type: string
+          description: Safe source label; unsafe absolute paths are reduced to a basename.
+        pageLabel: {type: string, nullable: true}
+        sourceLabel:
+          type: string
+          description: Display source label; currently mirrors source.
+        locationLabel:
+          type: string
+          description: Page label when present, otherwise the chapter identifier.
+        reviewStatus: {type: string, enum: [已审核]}
+        publicationStatus: {type: string, enum: [PUBLISHED]}
+        excerpt: {type: string, maxLength: 361}
+        score: {type: number, format: double, minimum: 0}
     ChatTurn:
       type: object
       required: [role, content]
@@ -794,6 +1423,67 @@ components:
         definition: {$ref: '#/components/schemas/AnimationDefinition'}
         recordId: {type: string, nullable: true}
         persisted: {type: boolean}
+    DsvpRequest:
+      type: object
+      required: [version, structure, operation, params, initial_state]
+      additionalProperties: false
+      properties:
+        version: {type: string, enum: ['1.0']}
+        structure:
+          type: string
+          enum: [stack, queue, sequential_list, linked_list, tree, graph, heap, hash, array]
+        operation: {type: string, minLength: 1, maxLength: 32}
+        params: {type: object, additionalProperties: true}
+        initial_state:
+          type: object
+          required: [data]
+          properties:
+            data: {type: array, maxItems: 64, items: {}}
+            metadata: {type: object, additionalProperties: true}
+        options: {type: object, additionalProperties: true}
+        context: {$ref: '#/components/schemas/DsvpEvidenceContext'}
+        chapter_id: {type: string, maxLength: 64, description: Compatibility alias for context.chapter_id}
+        chapterId: {type: string, maxLength: 64, description: Compatibility alias for context.chapter_id}
+        lesson_id: {type: string, maxLength: 160}
+        lessonId: {type: string, maxLength: 160}
+        presentation_id: {type: string, maxLength: 160}
+        presentationId: {type: string, maxLength: 160}
+        presentation_page_id: {type: string, maxLength: 160}
+        presentationPageId: {type: string, maxLength: 160}
+        classroom_session_id: {type: string, maxLength: 160}
+        classroomSessionId: {type: string, maxLength: 160}
+        source_ref: {type: string, maxLength: 160}
+    DsvpEvidenceContext:
+      type: object
+      additionalProperties: false
+      properties:
+        chapter_id: {type: string, maxLength: 64}
+        lesson_id: {type: string, maxLength: 160}
+        presentation_id: {type: string, maxLength: 160}
+        presentation_page_id: {type: string, maxLength: 160}
+        classroom_session_id: {type: string, maxLength: 160}
+        source_type: {type: string, enum: [API, CLASSROOM, PPT]}
+        source_ref: {type: string, maxLength: 160}
+    DsvpSimulationResponse:
+      type: object
+      required: [protocol, request, trace, animationData, evidencePersisted, matchSource]
+      properties:
+        protocol: {type: string, enum: [dsvp/1.0]}
+        request: {$ref: '#/components/schemas/DsvpRequest'}
+        trace: {type: object, additionalProperties: true}
+        animationData: {$ref: '#/components/schemas/AnimationDefinition'}
+        recordId:
+          type: string
+          nullable: true
+          description: Compatibility alias for animationRecordId; absent for a preview.
+        evidencePersisted:
+          type: boolean
+          description: True only when animation, snapshot, and learning event committed together.
+        animationRecordId: {type: string, nullable: true}
+        resolvedChapterId: {type: string, maxLength: 64, nullable: true}
+        matchSource:
+          type: string
+          enum: [NONE, CLASSROOM_SESSION, PRESENTATION_PAGE, EXPLICIT_CHAPTER, ANIMATION_DEFINITION]
     AnimationObservationRequest:
       type: object
       required: [observation]
@@ -901,3 +1591,334 @@ components:
         chapterId: {type: string, nullable: true}
         referenceId: {type: string, nullable: true}
         createdAt: {type: string, format: date-time}
+    AiReadiness:
+      type: object
+      required:
+        - operation
+        - evidenceRequired
+        - modelAvailable
+        - modelReason
+        - evidenceAvailable
+        - currentContext
+        - availableResourceCount
+        - availableKnowledgeChunkCount
+        - availableSourceCount
+        - excludedOrUnverifiedCount
+        - quotaStatus
+        - allowFormalGeneration
+        - blockingReasons
+      properties:
+        operation:
+          type: string
+          enum: [CHAT, CODE_ANALYSIS, ANIMATION_GENERATION]
+          description: Canonical operation selected by the optional readiness query parameter; defaults to CHAT.
+        evidenceRequired:
+          type: boolean
+          description: True only when the selected operation requires reviewed, audience-visible evidence before formal generation.
+        modelAvailable: {type: boolean}
+        modelReason:
+          type: string
+          enum:
+            - PERSISTED_CONFIGURATION_READY
+            - PERSISTED_CONFIGURATION_DISABLED
+            - PERSISTED_QUOTA_NOT_CONFIGURED
+            - PERSISTED_CONFIGURATION_UNAVAILABLE
+            - ENVIRONMENT_CONFIGURATION_READY
+            - ENVIRONMENT_QUOTA_NOT_CONFIGURED
+            - ENVIRONMENT_CONFIGURATION_INCOMPLETE
+        evidenceAvailable: {type: boolean}
+        evidenceReason:
+          type: string
+          nullable: true
+          enum: [QUESTION_EVIDENCE_UNAVAILABLE, CONTEXT_EVIDENCE_UNAVAILABLE]
+        currentContext: {$ref: '#/components/schemas/AiCurrentContext'}
+        availableResourceCount: {type: integer, minimum: 0}
+        availableKnowledgeChunkCount: {type: integer, minimum: 0}
+        availableSourceCount: {type: integer, minimum: 0}
+        excludedOrUnverifiedCount: {type: integer, minimum: 0}
+        remainingDailyTokenQuota:
+          type: integer
+          format: int64
+          minimum: 0
+          nullable: true
+          description: Null when the caller is not eligible for an active configured quota; otherwise the current server-side reservation ledger balance.
+        quotaStatus:
+          type: string
+          description: A controlled quota capability state derived from the atomic reservation ledger.
+          enum: [NOT_CONFIGURED, AVAILABLE, EXHAUSTED, CONCURRENCY_LIMITED]
+        allowFormalGeneration: {type: boolean}
+        blockingReasons:
+          type: array
+          items: {type: string}
+    AiCurrentContext:
+      type: object
+      required: [chapterId, queryScoped]
+      properties:
+        chapterId: {type: string, maxLength: 64, nullable: true}
+        queryScoped: {type: boolean}
+    AdminCapability:
+      type: object
+      required: [userId, roles, modules, service]
+      properties:
+        userId: {type: integer, format: int64}
+        roles:
+          type: array
+          items: {type: string, enum: [STUDENT, TEACHER, ADMIN]}
+        modules:
+          type: object
+          additionalProperties: {$ref: '#/components/schemas/AdminModuleCapability'}
+          description: Includes users, audit, reviewQueue, backgroundTasks, and modelSettings.
+        service: {$ref: '#/components/schemas/AdminServiceStatus'}
+    AdminModuleCapability:
+      type: object
+      required: [available, status]
+      properties:
+        available: {type: boolean}
+        status: {type: string, enum: [AVAILABLE, UNAVAILABLE, NOT_CONFIGURED]}
+        reason: {type: string, nullable: true}
+    AdminServiceStatus:
+      type: object
+      required: [name, version, status]
+      properties:
+        name: {type: string, enum: [spring]}
+        version: {type: string}
+        status: {type: string, enum: [AVAILABLE, UNAVAILABLE]}
+    AdminUser:
+      type: object
+      required: [id, email, status, roles, createdAt, updatedAt]
+      properties:
+        id: {type: integer, format: int64}
+        email: {type: string, format: email}
+        status: {type: string, enum: [ACTIVE, DISABLED]}
+        disabledReason: {type: string, nullable: true}
+        disabledAt: {type: string, format: date-time, nullable: true}
+        roles:
+          type: array
+          items: {type: string, enum: [STUDENT, TEACHER, ADMIN]}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    AdminUserPage:
+      type: object
+      required: [items, page, size, total]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/AdminUser'}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1, maximum: 100}
+        total: {type: integer, format: int64, minimum: 0}
+    AdminUserStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [ACTIVE, DISABLED]}
+        reason: {type: string, maxLength: 500, nullable: true}
+    AdminUserRolesRequest:
+      type: object
+      required: [roles]
+      properties:
+        roles:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items: {type: string, enum: [STUDENT, TEACHER, ADMIN]}
+    AdminAuditEvent:
+      type: object
+      required: [id, actorUserId, action, targetType, targetId, result, requestId, beforeSummary, afterSummary, createdAt]
+      properties:
+        id: {type: integer, format: int64}
+        actorUserId: {type: integer, format: int64}
+        action: {type: string}
+        targetType: {type: string}
+        targetId: {type: string}
+        result: {type: string}
+        requestId: {type: string, maxLength: 128}
+        beforeSummary: {type: string, description: Safe state summary; never credentials or private body content.}
+        afterSummary: {type: string, description: Safe state summary; never credentials or private body content. Model-config connection-test entries include non-negative connectionTestElapsedMs and credentialRedacted=true.}
+        createdAt: {type: string, format: date-time}
+    AdminAuditEventPage:
+      type: object
+      required: [items, page, size, total]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/AdminAuditEvent'}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1, maximum: 100}
+        total: {type: integer, format: int64, minimum: 0}
+    BackgroundTask:
+      type: object
+      required: [id, taskType, status, createdAt, retryCount, maxAttempts, requestId]
+      properties:
+        id: {type: integer, format: int64}
+        taskType:
+          type: string
+          maxLength: 64
+          description: >-
+            STALE_TASK_RECOVERY is the only current submitted, executable,
+            retryable, and cancelable type. The read-only ledger can contain
+            older records with another type.
+        status: {type: string, enum: [PENDING, RUNNING, SUCCEEDED, FAILED, CANCELED]}
+        createdAt: {type: string, format: date-time}
+        startedAt: {type: string, format: date-time, nullable: true}
+        deadlineAt: {type: string, format: date-time, nullable: true}
+        heartbeatAt: {type: string, format: date-time, nullable: true}
+        finishedAt: {type: string, format: date-time, nullable: true}
+        failureCode: {type: string, nullable: true}
+        failureReason: {type: string, nullable: true}
+        resultCount: {type: integer, minimum: 0, nullable: true, description: Number of records affected by a completed maintenance task}
+        retryCount: {type: integer, minimum: 0}
+        maxAttempts: {type: integer, minimum: 1}
+        cancelRequestedAt: {type: string, format: date-time, nullable: true}
+        requestedByUserId: {type: integer, format: int64, nullable: true}
+        requestId: {type: string, maxLength: 128}
+    BackgroundTaskPage:
+      type: object
+      required: [items, page, size, total]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/BackgroundTask'}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1, maximum: 100}
+        total: {type: integer, format: int64, minimum: 0}
+    ReviewStatus:
+      type: string
+      enum: [LEGACY_UNVERIFIED, DRAFT, PUBLISHED, VERIFIED, EXCLUDED]
+    ReviewItem:
+      type: object
+      required: [type, id, title, status, sourceComplete, updatedAt]
+      properties:
+        type:
+          type: string
+          enum: [RESOURCE, KNOWLEDGE_CHUNK, PRESENTATION_MANIFEST, PRESENTATION_PAGE, DSVP_REQUEST_SNAPSHOT]
+        id: {type: string, maxLength: 160}
+        title: {type: string}
+        status: {$ref: '#/components/schemas/ReviewStatus'}
+        chapterId: {type: string, nullable: true}
+        versionLabel: {type: string, nullable: true}
+        sourceComplete: {type: boolean}
+        updatedAt: {type: string, format: date-time}
+    ReviewItemPage:
+      type: object
+      required: [items, page, size, total]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/ReviewItem'}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1, maximum: 100}
+        total: {type: integer, format: int64, minimum: 0}
+    ReviewSource:
+      type: object
+      required: [type, id, title, status]
+      properties:
+        type: {type: string}
+        id: {type: string}
+        title: {type: string}
+        status: {type: string}
+    ReviewDetail:
+      type: object
+      required: [item, sourceChain]
+      properties:
+        item: {$ref: '#/components/schemas/ReviewItem'}
+        sourceChain:
+          type: array
+          items: {$ref: '#/components/schemas/ReviewSource'}
+    ReviewStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status: {$ref: '#/components/schemas/ReviewStatus'}
+        note: {type: string, maxLength: 500, nullable: true}
+    ReviewHistoryEvent:
+      type: object
+      required: [id, previousStatus, nextStatus, note, requestId, createdAt]
+      properties:
+        id: {type: integer, format: int64}
+        previousStatus: {$ref: '#/components/schemas/ReviewStatus'}
+        nextStatus: {$ref: '#/components/schemas/ReviewStatus'}
+        note: {type: string}
+        reviewerUserId: {type: integer, format: int64, nullable: true}
+        requestId: {type: string, maxLength: 128}
+        createdAt: {type: string, format: date-time}
+    ModelConfigCapability:
+      type: object
+      required: [available]
+      properties:
+        available: {type: boolean}
+        reason:
+          type: string
+          nullable: true
+          enum:
+            - MASTER_KEY_UNAVAILABLE
+            - NOT_CONFIGURED
+            - PERSISTED_CONFIGURATION_DISABLED
+            - PERSISTED_QUOTA_NOT_CONFIGURED
+            - MODEL_CONFIG_UNAVAILABLE
+        configuration:
+          allOf: [{$ref: '#/components/schemas/ModelConfig'}]
+          nullable: true
+    ModelConfig:
+      type: object
+      required:
+        - provider
+        - baseUrl
+        - model
+        - apiKeyConfigured
+        - temperature
+        - maxOutputTokens
+        - requestTimeoutMs
+        - retryCount
+        - dailyTokenQuota
+        - enabled
+        - updatedAt
+      properties:
+        provider: {type: string, maxLength: 128}
+        baseUrl: {type: string, format: uri, maxLength: 2048}
+        model: {type: string, maxLength: 512}
+        apiKeyConfigured: {type: boolean, description: Indicates that a saved encrypted credential is configured; the key itself is never returned.}
+        temperature: {type: number, minimum: 0, maximum: 2}
+        maxOutputTokens: {type: integer, minimum: 1, maximum: 32768}
+        requestTimeoutMs: {type: integer, format: int64, minimum: 1000, maximum: 120000}
+        retryCount: {type: integer, minimum: 0, maximum: 5}
+        dailyTokenQuota: {type: integer, format: int64, minimum: 0, maximum: 10000000}
+        enabled: {type: boolean}
+        lastConnectionTestStatus:
+          type: string
+          nullable: true
+          description: Diagnostic result of the most recent explicit connection probe, including CONNECTION_OK, CONNECTION_RESPONSE_INVALID, CONNECTION_FAILED, REDIRECT_REJECTED, or UPSTREAM_REJECTED. It is not a model-availability or generation-readiness gate; clients must use /ai/readiness and the generation response for those decisions.
+        lastConnectionTestedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Diagnostic timestamp for the most recent explicit connection probe; it does not establish current provider readiness.
+        updatedAt: {type: string, format: date-time}
+    UpdateModelConfigRequest:
+      type: object
+      required: [provider, baseUrl, model]
+      properties:
+        provider: {type: string, minLength: 1, maxLength: 128}
+        baseUrl: {type: string, format: uri, minLength: 1, maxLength: 2048}
+        model: {type: string, minLength: 1, maxLength: 512}
+        apiKey:
+          type: string
+          maxLength: 4096
+          writeOnly: true
+          description: Required for a new provider or base URL. Never returned or logged.
+        temperature: {type: number, minimum: 0, maximum: 2}
+        maxOutputTokens: {type: integer, minimum: 1, maximum: 32768}
+        requestTimeoutMs: {type: integer, format: int64, minimum: 1000, maximum: 120000}
+        retryCount: {type: integer, minimum: 0, maximum: 5}
+        dailyTokenQuota: {type: integer, format: int64, minimum: 0, maximum: 10000000}
+        enabled: {type: boolean}
+    ModelConfigConnectionTest:
+      type: object
+      required: [connected, code]
+      properties:
+        connected: {type: boolean}
+        code:
+          type: string
+          pattern: '^[A-Z0-9_]{1,64}$'
+          description: Controlled result code. CONNECTION_OK requires a non-blank OpenAI-compatible choices[0].message.content value; CONNECTION_RESPONSE_INVALID means a 2xx response failed that shape check. Other standard outcomes are CONNECTION_FAILED, REDIRECT_REJECTED, and UPSTREAM_REJECTED.

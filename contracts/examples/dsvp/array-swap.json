@@ -1,0 +1,1 @@
+{"version":"1.0","structure":"array","operation":"swap","params":{"i":0,"j":1,"capacity":8},"initial_state":{"data":[1,2],"metadata":{"capacity":8}},"source_ref":"example/array"}

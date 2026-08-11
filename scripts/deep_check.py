@@ -3,8 +3,11 @@
 import re
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
 
-FILE = "C:/Users/Lenovo/Desktop/智能体/data-structure-agent/prototype.html"
+FILE = Path(__file__).resolve().parents[1] / "prototype.html"
+COMPATIBILITY_TARGET = "frontend/index.html"
 
 def check_js_syntax():
     """Extract JS blocks and check syntax with Node."""
@@ -15,15 +18,23 @@ def check_js_syntax():
     scripts = re.findall(r"<script[^>]*>(.*?)</script>", html, re.DOTALL)
     errors = []
     for i, s in enumerate(scripts):
-        if len(s.strip()) < 50:
+        if not s.strip():
             continue
-        tmp = f"C:/Users/Lenovo/AppData/Local/Temp/check_{i}.js"
-        with open(tmp, "w", encoding="utf-8", errors="replace") as f:
-            f.write(s)
-        result = subprocess.run(
-            ["node", "--check", tmp],
-            capture_output=True, text=True, timeout=10
-        )
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".js", encoding="utf-8", errors="replace", delete=False
+        ) as temporary_file:
+            temporary_file.write(s)
+            tmp = temporary_file.name
+        try:
+            result = subprocess.run(
+                ["node", "--check", tmp],
+                capture_output=True, text=True, timeout=10
+            )
+        finally:
+            try:
+                Path(tmp).unlink()
+            except FileNotFoundError:
+                pass
         if result.returncode != 0:
             errors.append(f"Script block {i}: {result.stderr.strip()}")
         else:
@@ -65,12 +76,25 @@ def check_unmatched_braces():
     return issues
 
 def check_undefined_refs():
-    """Check for common JS errors - undefined function refs."""
+    """Check legacy function references or the compatibility redirect."""
     with open(FILE, "r", encoding="utf-8") as f:
         html = f.read()
-    # Check for common issues
+
+    if COMPATIBILITY_TARGET in html:
+        issues = []
+        if not re.search(
+            rf'<meta[^>]+http-equiv=["\']refresh["\'][^>]+url={re.escape(COMPATIBILITY_TARGET)}',
+            html,
+            re.IGNORECASE,
+        ):
+            issues.append("Compatibility entry is missing its refresh target")
+        if f'href="{COMPATIBILITY_TARGET}"' not in html:
+            issues.append("Compatibility entry is missing its fallback link")
+        if f'location.replace("{COMPATIBILITY_TARGET}")' not in html:
+            issues.append("Compatibility entry is missing its JavaScript redirect")
+        return issues
+
     issues = []
-    # Check if key functions are defined
     for func in ["showLogin", "hideLogin", "setAuth", "loadServerConversations",
                   "renderAll", "flashStatus", "saveState", "loadState",
                   "escapeHtml", "escapeAttr", "renderMarkdown", "showToast",
@@ -144,7 +168,7 @@ def check_duplicate_handlers():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("DEEP CODE CHECK: prototype.html")
+    print(f"DEEP CODE CHECK: {FILE}")
     print("=" * 60)
 
     print("\n1. JS SYNTAX CHECK")
@@ -174,14 +198,14 @@ if __name__ == "__main__":
     else:
         print("  All brackets matched")
 
-    print("\n4. UNDEFINED FUNCTION REFS")
+    print("\n4. FUNCTION REFS OR COMPATIBILITY REDIRECT")
     print("-" * 40)
     issues = check_undefined_refs()
     if issues:
         for i in issues:
             print(f"  {i}")
     else:
-        print("  All referenced functions are defined")
+        print("  All required checks passed")
 
     print("\n5. HTML STRUCTURE")
     print("-" * 40)

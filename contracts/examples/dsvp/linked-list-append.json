@@ -1,0 +1,1 @@
+{"version":"1.0","structure":"linked_list","operation":"append","params":{"value":3,"capacity":8},"initial_state":{"data":[1,2],"metadata":{"capacity":8}},"source_ref":"example/linked-list"}

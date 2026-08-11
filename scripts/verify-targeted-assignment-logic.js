@@ -11,7 +11,7 @@ const env = {
   ...process.env,
   PORT: port,
   DB_PATH: dbPath,
-  JWT_SECRET: "targeted-assignment-test-secret",
+  JWT_SECRET: "targeted-assignment-test-secret-32-characters-minimum",
   TEACHER_EMAILS: "teacher@example.com",
   SMTP_HOST: "",
   MIMO_API_KEY: "",
@@ -23,7 +23,7 @@ const http = require("http");
 const assert = require("assert");
 const crypto = require("crypto");
 const Database = require("better-sqlite3");
-require("./server.js");
+require("./backend/node/server.js");
 
 function request(method, path, body, token) {
   return new Promise((resolve, reject) => {

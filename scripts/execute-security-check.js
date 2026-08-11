@@ -1,7 +1,10 @@
 const assert = require("node:assert/strict");
 const http = require("node:http");
+const path = require("node:path");
 const { spawn } = require("node:child_process");
 
+const root = path.join(__dirname, "..");
+const nodeRoot = path.join(root, "backend", "node");
 const APP_PORT = 8891;
 const MOCK_PORT = 18891;
 const APP_BASE = `http://127.0.0.1:${APP_PORT}`;
@@ -131,7 +134,7 @@ async function waitForHealth(child, timeoutMs = 10000) {
 async function run() {
   const mock = await startMockExecutor();
   const child = spawn(process.execPath, ["server.js"], {
-    cwd: process.cwd(),
+    cwd: nodeRoot,
     env: {
       ...process.env,
       HOST: "127.0.0.1",
