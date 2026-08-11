@@ -1,6 +1,6 @@
 # 私有课程知识库接入说明
 
-本目录只保存知识库接入说明。完整教材 OCR、习题答案和其他受版权保护的课程材料应放在 `knowledge/private/`，该目录已被 `.gitignore` 排除，不应上传到公开 GitHub 仓库。
+本目录只保存知识库接入说明。完整教材 OCR、习题答案和其他受版权保护的课程材料应放在 `private/knowledge/`，该目录已被 `.gitignore` 排除，不应上传到公开 GitHub 仓库。
 
 ## 导入教材包
 
@@ -10,7 +10,7 @@
 powershell -ExecutionPolicy Bypass -File .\scripts\import-knowledge-pack.ps1 "D:\path\to\knowledge-pack.zip"
 ```
 
-脚本默认导入到 `knowledge/private/textbook/`，只提取：
+脚本默认导入到 `private/knowledge/`，只提取：
 
 - `lessons/*.md`：按课时拆分的教材内容。
 - `raw/answer_by_chapter.json`：按章整理的习题参考答案。
@@ -23,7 +23,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\import-knowledge-pack.ps1 "D:
 后端启动时会自动读取 `KNOWLEDGE_DIR` 并建立内存检索索引。默认目录是：
 
 ```text
-knowledge/private/textbook
+private/knowledge
 ```
 
 提问时，后端会根据问题和当前章节召回相关课时片段，将最多 4 条结果放入模型上下文。教材目录不存在或加载失败时，聊天服务会自动退回原有章节上下文，不影响启动。

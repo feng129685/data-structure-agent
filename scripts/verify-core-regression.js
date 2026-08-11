@@ -5,11 +5,13 @@ const { spawnSync } = require("child_process");
 
 const root = path.join(__dirname, "..");
 
-const inlineScriptFiles = ["prototype.html", "index.html"];
+const inlineScriptFiles = ["frontend/index.html", "frontend/prototype.html"];
 const nodeCheckFiles = [
-  "server.js",
-  "lib/knowledge-retriever.js",
-  "lib/animation-validator.js",
+  "backend/node/server.js",
+  "backend/node/presentation-runtime.js",
+  "backend/node/lib/knowledge-retriever.js",
+  "backend/node/lib/animation-validator.js",
+  "backend/node/lib/dsvp-adapter.js",
   "scripts/verify-core-regression.js",
   "scripts/verify-knowledge-retrieval.js",
   "scripts/verify-knowledge-api.js",
@@ -17,9 +19,27 @@ const nodeCheckFiles = [
   "scripts/verify-security-hardening.js",
   "scripts/verify-model-stream-errors.js",
   "scripts/verify-animation-validation.js",
+  "scripts/verify-animation-record-flow.js",
+  "scripts/verify-dsvp-adapter.js",
+  "scripts/verify-dsvp-api.js",
+  "scripts/verify-presentation-runtime.js",
+  "scripts/verify-presentation-ui-static.js",
+  "scripts/verify-presentation-live-assets.js",
+  "scripts/verify-presentation-live-assets-boundary.js",
+  "scripts/verify-four-core-navigation-static.js",
+  "scripts/verify-four-core-ui-static.js",
+  "scripts/verify-model-availability-ui-static.js",
+  "scripts/verify-presentation-api.js",
+  "scripts/verify-frontend-layout.js",
+  "scripts/check-ppt-offline.js",
+  "scripts/verify-private-resource-bundle.js",
   "scripts/verify-case-demo-static.js",
   "scripts/verify-compiler-response-behavior.js",
-  "scripts/execute-security-check.js"
+  "scripts/execute-security-check.js",
+  "scripts/verify-production-config.js",
+  "scripts/verify-api-contract-fixtures.js",
+  "scripts/verify-node-production-debug-knowledge.js",
+  "scripts/verify-teacher-assignment-ownership.js"
 ];
 const verifierScripts = [
   "scripts/verify-knowledge-retrieval.js",
@@ -28,9 +48,27 @@ const verifierScripts = [
   "scripts/verify-security-hardening.js",
   "scripts/verify-model-stream-errors.js",
   "scripts/verify-animation-validation.js",
+  "scripts/verify-animation-record-flow.js",
   "scripts/verify-case-demo-static.js",
   "scripts/verify-compiler-response-behavior.js",
   "scripts/execute-security-check.js",
+  "scripts/verify-production-config.js",
+  "scripts/verify-api-contract-fixtures.js",
+  "scripts/verify-node-production-debug-knowledge.js",
+  "scripts/verify-teacher-assignment-ownership.js",
+  "scripts/verify-dsvp-adapter.js",
+  "scripts/verify-dsvp-api.js",
+  "scripts/verify-presentation-runtime.js",
+  "scripts/verify-presentation-ui-static.js",
+  "scripts/verify-presentation-live-assets.js",
+  "scripts/verify-presentation-live-assets-boundary.js",
+  "scripts/verify-four-core-navigation-static.js",
+  "scripts/verify-four-core-ui-static.js",
+  "scripts/verify-model-availability-ui-static.js",
+  "scripts/check-ppt-offline.js",
+  "scripts/verify-private-resource-bundle.js",
+  "scripts/verify-presentation-api.js",
+  "scripts/verify-frontend-layout.js",
   "scripts/verify-learning-evidence-checklist-static.js",
   "scripts/verify-learning-snapshot-static.js",
   "scripts/verify-evidence-aware-orchestrator-static.js",
@@ -56,6 +94,15 @@ const verifierScripts = [
   "scripts/verify-teacher-assignment-step-evidence-static.js",
   "scripts/verify-teacher-step-evidence-coverage-static.js"
 ];
+
+const hasVueCanonicalEntry = fs.existsSync(path.join(root, "frontend", "src", "main.ts"));
+const legacyFrontendVerifierScripts = new Set(
+  verifierScripts.filter((script) => script.endsWith("-static.js"))
+);
+legacyFrontendVerifierScripts.add("scripts/verify-animation-record-flow.js");
+const activeVerifierScripts = hasVueCanonicalEntry
+  ? verifierScripts.filter((script) => !legacyFrontendVerifierScripts.has(script))
+  : verifierScripts;
 
 const checks = [];
 
@@ -132,9 +179,13 @@ for (const file of nodeCheckFiles) {
   runNode(["--check", file], `node-check ${file}`);
 }
 
-for (const script of verifierScripts) {
+for (const script of activeVerifierScripts) {
   assertFileExists(script);
   runNode([script], rel(script));
+}
+
+if (hasVueCanonicalEntry) {
+  console.log(`legacy-frontend-static-verifiers-skipped count=${verifierScripts.length - activeVerifierScripts.length}`);
 }
 
 console.log(`\ncore-regression-ok checks=${checks.length}`);

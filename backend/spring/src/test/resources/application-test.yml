@@ -1,0 +1,9 @@
+app:
+  security:
+    jwt-secret: test-only-jwt-secret-with-at-least-32-characters
+    node-compat-jwt-secret: node-compat-test-secret-with-at-least-32-characters
+    node-compat-enabled: true
+  auth:
+    expose-development-code: true
+  knowledge:
+    auto-publish-local: false

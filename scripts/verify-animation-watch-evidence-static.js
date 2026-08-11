@@ -2,8 +2,8 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
-const prototype = fs.readFileSync(path.join(root, "prototype.html"), "utf8");
-const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
+const prototype = fs.readFileSync(path.join(root, "frontend", "prototype.html"), "utf8");
+const index = fs.readFileSync(path.join(root, "frontend", "index.html"), "utf8");
 
 const markers = [
   "function toggleAnimationWatchTask",
@@ -23,7 +23,7 @@ const markers = [
   "动画观察证据已保存",
   "把动画观察任务带回伴学复盘",
   "toggleAnimationWatchTask(button)",
-  "saveAnimationWatchEvidence(button.dataset.animationWatchSave)",
+  "saveAnimationWatchEvidence(button.dataset.animationWatchSave, button)",
   "sendAnimationWatchToCoach(button.dataset.animationWatchReview)"
 ];
 

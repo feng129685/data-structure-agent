@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
+const frontendRoot = path.join(root, "frontend");
 const files = ["prototype.html", "index.html"];
 
 const markers = [
@@ -26,7 +27,7 @@ const markers = [
 
 const failures = [];
 for (const file of files) {
-  const text = fs.readFileSync(path.join(root, file), "utf8");
+  const text = fs.readFileSync(path.join(frontendRoot, file), "utf8");
   const missing = markers.filter((marker) => !text.includes(marker));
   if (missing.length) failures.push({ file, missing });
 }

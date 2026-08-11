@@ -7,7 +7,7 @@ const {
   createKnowledgeRetriever,
   formatKnowledgeContext,
   tokenizeQuery
-} = require("../lib/knowledge-retriever");
+} = require("../backend/node/lib/knowledge-retriever");
 
 function writeLesson(rootDir, filename, body) {
   const lessonDir = path.join(rootDir, "lessons");

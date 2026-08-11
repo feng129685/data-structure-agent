@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const html = fs.readFileSync(path.join(__dirname, "..", "prototype.html"), "utf8");
+const html = fs.readFileSync(path.join(__dirname, "..", "frontend", "prototype.html"), "utf8");
 
 const markers = [
   "teacher-followup-list",

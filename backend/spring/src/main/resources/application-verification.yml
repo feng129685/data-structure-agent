@@ -1,0 +1,43 @@
+server:
+  address: 127.0.0.1
+  port: ${SERVER_PORT:8793}
+  shutdown: graceful
+
+spring:
+  config:
+    activate:
+      on-profile: verification
+  datasource:
+    url: ${DB_URL:jdbc:h2:mem:dsagent-verification;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE}
+    username: ${DB_USER:sa}
+    password: ${DB_PASSWORD:}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+  flyway:
+    enabled: true
+    clean-disabled: false
+
+management:
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  security:
+    jwt-secret: ${JWT_SECRET:local-verification-jwt-secret-change-me-please}
+    node-compat-enabled: false
+  auth:
+    expose-development-code: false
+    mail-enabled: false
+  model:
+    provider:
+    api-key:
+    base-url:
+    name:
+  ai-quota:
+    daily-token-quota: 0
+  knowledge:
+    enabled: false
+    auto-publish-local: false
+    directory: ${KNOWLEDGE_DIR:${java.io.tmpdir}/ds-agent-verification-knowledge}
+  resources:
+    directory: ${RESOURCE_DIR:${java.io.tmpdir}/ds-agent-verification-resources}

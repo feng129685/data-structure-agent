@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const htmlPath = path.join(__dirname, "..", "prototype.html");
+const htmlPath = path.join(__dirname, "..", "frontend", "prototype.html");
 const html = fs.readFileSync(htmlPath, "utf8");
 
 const markers = [

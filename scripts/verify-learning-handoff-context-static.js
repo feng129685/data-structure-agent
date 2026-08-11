@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
+const frontendRoot = path.join(root, "frontend");
 const files = ["prototype.html", "index.html"];
 
 const htmlMarkers = [
@@ -33,14 +34,14 @@ const serverMarkers = [
 const failures = [];
 
 for (const file of files) {
-  const text = fs.readFileSync(path.join(root, file), "utf8");
+  const text = fs.readFileSync(path.join(frontendRoot, file), "utf8");
   const missing = htmlMarkers.filter((marker) => !text.includes(marker));
   if (missing.length) failures.push({ file, missing });
 }
 
-const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
+const server = fs.readFileSync(path.join(root, "backend", "node", "server.js"), "utf8");
 const missingServer = serverMarkers.filter((marker) => !server.includes(marker));
-if (missingServer.length) failures.push({ file: "server.js", missing: missingServer });
+if (missingServer.length) failures.push({ file: "backend/node/server.js", missing: missingServer });
 
 if (failures.length) {
   for (const failure of failures) {

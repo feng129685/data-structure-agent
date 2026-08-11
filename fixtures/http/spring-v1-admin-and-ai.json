@@ -1,0 +1,557 @@
+{
+  "contract": "openapi-v1",
+  "server": "/api/v1",
+  "authentication": {
+    "mode": "authenticated-session-or-bearer",
+    "note": "Credentials are intentionally omitted from fixtures. Admin paths require the current database ADMIN role."
+  },
+  "cases": [
+    {
+      "name": "formal chat requires an authenticated quota and evidence gate",
+      "method": "POST",
+      "path": "/chat",
+      "request": {
+        "prompt": "Explain stack ordering.",
+        "chapterId": "03-stack-queue",
+        "history": []
+      },
+      "response": {
+        "code": "AI_QUOTA_NOT_CONFIGURED",
+        "message": "Formal generation is unavailable until an enabled model and daily token quota are configured",
+        "requestId": "req-chat-fixture"
+      }
+    },
+    {
+      "name": "chat stream uses named events and cleans up on disconnect or upstream failure",
+      "method": "POST",
+      "path": "/chat/stream",
+      "request": {
+        "prompt": "Explain stack ordering.",
+        "chapterId": "03-stack-queue",
+        "history": []
+      },
+      "response": {
+        "contentType": "text/event-stream",
+        "events": [
+          "sources",
+          "delta",
+          "done",
+          "error"
+        ],
+        "errorCodes": [
+          "AI_QUOTA_AUTHENTICATION_REQUIRED",
+          "CHAT_EVIDENCE_UNAVAILABLE",
+          "MODEL_STREAM_IDLE_TIMEOUT"
+        ],
+        "disconnectBehavior": "reservation-and-concurrency-released"
+      }
+    },
+    {
+      "name": "code analysis readiness can proceed without chat evidence when model and quota are ready",
+      "method": "GET",
+      "path": "/ai/readiness",
+      "query": {
+        "operation": "CODE_ANALYSIS",
+        "prompt": "Explain this implementation."
+      },
+      "response": {
+        "operation": "CODE_ANALYSIS",
+        "evidenceRequired": false,
+        "modelAvailable": true,
+        "modelReason": "ENVIRONMENT_CONFIGURATION_READY",
+        "evidenceAvailable": false,
+        "evidenceReason": "QUESTION_EVIDENCE_UNAVAILABLE",
+        "currentContext": {
+          "chapterId": null,
+          "queryScoped": true
+        },
+        "availableResourceCount": 0,
+        "availableKnowledgeChunkCount": 0,
+        "availableSourceCount": 0,
+        "excludedOrUnverifiedCount": 0,
+        "remainingDailyTokenQuota": 2048,
+        "quotaStatus": "AVAILABLE",
+        "allowFormalGeneration": true,
+        "blockingReasons": []
+      }
+    },
+    {
+      "name": "admin capability map reports database-backed modules",
+      "method": "GET",
+      "path": "/admin/capabilities",
+      "response": {
+        "userId": 7,
+        "roles": [
+          "ADMIN"
+        ],
+        "modules": {
+          "users": {
+            "available": true,
+            "status": "AVAILABLE",
+            "reason": null
+          },
+          "audit": {
+            "available": true,
+            "status": "AVAILABLE",
+            "reason": null
+          },
+          "reviewQueue": {
+            "available": true,
+            "status": "AVAILABLE",
+            "reason": null
+          },
+          "backgroundTasks": {
+            "available": true,
+            "status": "AVAILABLE",
+            "reason": null
+          },
+          "modelSettings": {
+            "available": true,
+            "status": "AVAILABLE",
+            "reason": null
+          }
+        },
+        "service": {
+          "name": "spring",
+          "version": "0.0.1-SNAPSHOT",
+          "status": "AVAILABLE"
+        }
+      }
+    },
+    {
+      "name": "user page is safe for an administrator interface",
+      "method": "GET",
+      "path": "/admin/users",
+      "query": {
+        "page": 0,
+        "size": 20,
+        "status": "ACTIVE"
+      },
+      "response": {
+        "items": [
+          {
+            "id": 11,
+            "email": "student@example.invalid",
+            "status": "ACTIVE",
+            "disabledReason": null,
+            "disabledAt": null,
+            "roles": [
+              "STUDENT"
+            ],
+            "createdAt": "2026-08-11T00:00:00Z",
+            "updatedAt": "2026-08-11T00:00:00Z"
+          }
+        ],
+        "page": 0,
+        "size": 20,
+        "total": 1
+      }
+    },
+    {
+      "name": "review detail exposes a source chain before verification",
+      "method": "GET",
+      "path": "/admin/reviews/{type}/{id}",
+      "pathParameters": {
+        "type": "KNOWLEDGE_CHUNK",
+        "id": "chunk-stack-001"
+      },
+      "response": {
+        "item": {
+          "type": "KNOWLEDGE_CHUNK",
+          "id": "chunk-stack-001",
+          "title": "Stack ordering note",
+          "status": "DRAFT",
+          "chapterId": "stack",
+          "versionLabel": "v1",
+          "sourceComplete": false,
+          "updatedAt": "2026-08-11T00:00:00Z"
+        },
+        "sourceChain": [
+          {
+            "type": "CHAPTER",
+            "id": "stack",
+            "title": "Stack",
+            "status": "PUBLISHED"
+          },
+          {
+            "type": "RESOURCE",
+            "id": "resource-stack-001",
+            "title": "Reviewed stack notes",
+            "status": "DRAFT"
+          }
+        ]
+      }
+    },
+    {
+      "name": "background task records deadline and failure state",
+      "method": "GET",
+      "path": "/admin/background-tasks/{id}",
+      "pathParameters": {
+        "id": 23
+      },
+      "response": {
+        "id": 23,
+        "taskType": "STALE_TASK_RECOVERY",
+        "status": "FAILED",
+        "createdAt": "2026-08-11T00:00:00Z",
+        "startedAt": "2026-08-11T00:00:01Z",
+        "deadlineAt": "2026-08-11T00:01:01Z",
+        "heartbeatAt": null,
+        "finishedAt": "2026-08-11T00:01:02Z",
+        "failureCode": "BACKGROUND_TASK_EXECUTION_FAILED",
+        "failureReason": "Task execution did not complete",
+        "resultCount": null,
+        "retryCount": 0,
+        "maxAttempts": 3,
+        "cancelRequestedAt": null,
+        "requestedByUserId": 7,
+        "requestId": "req-fixture-23"
+      }
+    },
+    {
+      "name": "model configuration capability never returns a credential",
+      "method": "GET",
+      "path": "/admin/model-config",
+      "response": {
+        "available": false,
+        "reason": "PERSISTED_CONFIGURATION_DISABLED",
+        "configuration": {
+          "provider": "openai-compatible",
+          "baseUrl": "https://models.example.invalid/v1",
+          "model": "administrator-selected-model",
+          "apiKeyConfigured": true,
+          "temperature": 0.2,
+          "maxOutputTokens": 1024,
+          "requestTimeoutMs": 45000,
+          "retryCount": 1,
+          "dailyTokenQuota": 10000,
+          "enabled": false,
+          "lastConnectionTestStatus": "CONNECTION_OK",
+          "lastConnectionTestedAt": "2026-08-11T00:00:00Z",
+          "updatedAt": "2026-08-11T00:00:00Z"
+        }
+      }
+    },
+    {
+      "name": "model control update can retain an existing secure credential",
+      "method": "PUT",
+      "path": "/admin/model-config",
+      "request": {
+        "provider": "openai-compatible",
+        "baseUrl": "https://models.example.invalid/v1",
+        "model": "administrator-selected-model",
+        "temperature": 0.4,
+        "maxOutputTokens": 2048,
+        "requestTimeoutMs": 60000,
+        "retryCount": 2,
+        "dailyTokenQuota": 10000,
+        "enabled": true
+      },
+      "response": {
+        "provider": "openai-compatible",
+        "baseUrl": "https://models.example.invalid/v1",
+        "model": "administrator-selected-model",
+        "apiKeyConfigured": true,
+        "temperature": 0.4,
+        "maxOutputTokens": 2048,
+        "requestTimeoutMs": 60000,
+        "retryCount": 2,
+        "dailyTokenQuota": 10000,
+        "enabled": true,
+        "lastConnectionTestStatus": "CONNECTION_OK",
+        "lastConnectionTestedAt": "2026-08-11T00:00:00Z",
+        "updatedAt": "2026-08-11T00:00:00Z"
+      }
+    },
+    {
+      "name": "model connection test uses the saved OpenAI-compatible POST and rejects an invalid 2xx body",
+      "method": "POST",
+      "path": "/admin/model-config/test",
+      "response": {
+        "connected": false,
+        "code": "CONNECTION_RESPONSE_INVALID"
+      }
+    },
+    {
+      "name": "administrator can inspect a safe user detail",
+      "method": "GET",
+      "path": "/admin/users/{id}",
+      "pathParameters": {
+        "id": 11
+      },
+      "response": {
+        "id": 11,
+        "email": "student@example.invalid",
+        "status": "DISABLED",
+        "disabledReason": "Repeated policy violation",
+        "disabledAt": "2026-08-11T00:00:00Z",
+        "roles": [
+          "STUDENT"
+        ],
+        "createdAt": "2026-08-01T00:00:00Z",
+        "updatedAt": "2026-08-11T00:00:00Z"
+      }
+    },
+    {
+      "name": "user status changes contain an auditable reason",
+      "method": "PATCH",
+      "path": "/admin/users/{id}/status",
+      "pathParameters": {
+        "id": 11
+      },
+      "request": {
+        "status": "DISABLED",
+        "reason": "Repeated policy violation"
+      },
+      "response": {
+        "id": 11,
+        "email": "student@example.invalid",
+        "status": "DISABLED",
+        "disabledReason": "Repeated policy violation",
+        "disabledAt": "2026-08-11T00:00:00Z",
+        "roles": [
+          "STUDENT"
+        ],
+        "createdAt": "2026-08-01T00:00:00Z",
+        "updatedAt": "2026-08-11T00:00:00Z"
+      }
+    },
+    {
+      "name": "role replacement returns the current safe role set",
+      "method": "PATCH",
+      "path": "/admin/users/{id}/roles",
+      "pathParameters": {
+        "id": 11
+      },
+      "request": {
+        "roles": [
+          "STUDENT",
+          "TEACHER"
+        ]
+      },
+      "response": {
+        "id": 11,
+        "email": "student@example.invalid",
+        "status": "ACTIVE",
+        "disabledReason": null,
+        "disabledAt": null,
+        "roles": [
+          "STUDENT",
+          "TEACHER"
+        ],
+        "createdAt": "2026-08-01T00:00:00Z",
+        "updatedAt": "2026-08-11T00:00:00Z"
+      }
+    },
+    {
+      "name": "audit page records a request identifier and safe state summary",
+      "method": "GET",
+      "path": "/admin/audit-events",
+      "query": {
+        "page": 0,
+        "size": 50,
+        "targetType": "USER"
+      },
+      "response": {
+        "items": [
+          {
+            "id": 31,
+            "actorUserId": 7,
+            "action": "USER_STATUS_CHANGED",
+            "targetType": "USER",
+            "targetId": "11",
+            "result": "SUCCESS",
+            "requestId": "req-fixture-31",
+            "beforeSummary": "status=ACTIVE",
+            "afterSummary": "status=DISABLED",
+            "createdAt": "2026-08-11T00:00:00Z"
+          }
+        ],
+        "page": 0,
+        "size": 50,
+        "total": 1
+      }
+    },
+    {
+      "name": "background task list supports lifecycle filtering",
+      "method": "GET",
+      "path": "/admin/background-tasks",
+      "query": {
+        "page": 0,
+        "size": 20,
+        "status": "PENDING"
+      },
+      "response": {
+        "items": [
+          {
+            "id": 24,
+            "taskType": "STALE_TASK_RECOVERY",
+            "status": "PENDING",
+            "createdAt": "2026-08-11T00:00:00Z",
+            "startedAt": null,
+            "deadlineAt": "2026-08-11T00:01:00Z",
+            "heartbeatAt": null,
+            "finishedAt": null,
+            "failureCode": null,
+            "failureReason": null,
+            "resultCount": null,
+            "retryCount": 0,
+            "maxAttempts": 3,
+            "cancelRequestedAt": null,
+            "requestedByUserId": 7,
+            "requestId": "req-fixture-24"
+          }
+        ],
+        "page": 0,
+        "size": 20,
+        "total": 1
+      }
+    },
+    {
+      "name": "timeout recovery returns an accepted durable task",
+      "method": "POST",
+      "path": "/admin/background-tasks/recover-timeouts",
+      "response": {
+        "id": 25,
+        "taskType": "STALE_TASK_RECOVERY",
+        "status": "PENDING",
+        "createdAt": "2026-08-11T00:00:00Z",
+        "startedAt": null,
+        "deadlineAt": "2026-08-11T00:01:00Z",
+        "heartbeatAt": null,
+        "finishedAt": null,
+        "failureCode": null,
+        "failureReason": null,
+        "resultCount": null,
+        "retryCount": 0,
+        "maxAttempts": 3,
+        "cancelRequestedAt": null,
+        "requestedByUserId": 7,
+        "requestId": "req-fixture-25"
+      }
+    },
+    {
+      "name": "failed recovery may be retried through a durable task record",
+      "method": "POST",
+      "path": "/admin/background-tasks/{id}/retry",
+      "pathParameters": {
+        "id": 23
+      },
+      "response": {
+        "id": 23,
+        "taskType": "STALE_TASK_RECOVERY",
+        "status": "PENDING",
+        "createdAt": "2026-08-11T00:00:00Z",
+        "startedAt": null,
+        "deadlineAt": "2026-08-11T00:01:00Z",
+        "heartbeatAt": null,
+        "finishedAt": null,
+        "failureCode": null,
+        "failureReason": null,
+        "resultCount": null,
+        "retryCount": 1,
+        "maxAttempts": 3,
+        "cancelRequestedAt": null,
+        "requestedByUserId": 7,
+        "requestId": "req-fixture-23"
+      }
+    },
+    {
+      "name": "pending recovery can be canceled before execution",
+      "method": "POST",
+      "path": "/admin/background-tasks/{id}/cancel",
+      "pathParameters": {
+        "id": 24
+      },
+      "response": {
+        "id": 24,
+        "taskType": "STALE_TASK_RECOVERY",
+        "status": "CANCELED",
+        "createdAt": "2026-08-11T00:00:00Z",
+        "startedAt": null,
+        "deadlineAt": "2026-08-11T00:01:00Z",
+        "heartbeatAt": null,
+        "finishedAt": "2026-08-11T00:00:01Z",
+        "failureCode": null,
+        "failureReason": null,
+        "resultCount": null,
+        "retryCount": 0,
+        "maxAttempts": 3,
+        "cancelRequestedAt": "2026-08-11T00:00:01Z",
+        "requestedByUserId": 7,
+        "requestId": "req-fixture-24"
+      }
+    },
+    {
+      "name": "review queue supports published-source filtering",
+      "method": "GET",
+      "path": "/admin/reviews",
+      "query": {
+        "page": 0,
+        "size": 20,
+        "type": "RESOURCE",
+        "status": "DRAFT"
+      },
+      "response": {
+        "items": [
+          {
+            "type": "RESOURCE",
+            "id": "resource-stack-001",
+            "title": "Reviewed stack notes",
+            "status": "DRAFT",
+            "chapterId": "stack",
+            "versionLabel": "v1",
+            "sourceComplete": true,
+            "updatedAt": "2026-08-11T00:00:00Z"
+          }
+        ],
+        "page": 0,
+        "size": 20,
+        "total": 1
+      }
+    },
+    {
+      "name": "review status transition returns the source-complete item",
+      "method": "PATCH",
+      "path": "/admin/reviews/{type}/{id}/status",
+      "pathParameters": {
+        "type": "RESOURCE",
+        "id": "resource-stack-001"
+      },
+      "request": {
+        "status": "VERIFIED",
+        "note": "Published source chain confirmed"
+      },
+      "response": {
+        "type": "RESOURCE",
+        "id": "resource-stack-001",
+        "title": "Reviewed stack notes",
+        "status": "VERIFIED",
+        "chapterId": "stack",
+        "versionLabel": "v1",
+        "sourceComplete": true,
+        "updatedAt": "2026-08-11T00:00:00Z"
+      }
+    },
+    {
+      "name": "review history provides transition provenance",
+      "method": "GET",
+      "path": "/admin/reviews/{type}/{id}/history",
+      "pathParameters": {
+        "type": "RESOURCE",
+        "id": "resource-stack-001"
+      },
+      "response": [
+        {
+          "id": 41,
+          "previousStatus": "DRAFT",
+          "nextStatus": "VERIFIED",
+          "note": "Published source chain confirmed",
+          "reviewerUserId": 7,
+          "requestId": "req-fixture-41",
+          "createdAt": "2026-08-11T00:00:00Z"
+        }
+      ]
+    }
+  ]
+}

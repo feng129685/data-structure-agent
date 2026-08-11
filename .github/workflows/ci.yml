@@ -31,11 +31,11 @@ jobs:
           java-version: '21'
           cache: maven
       - name: Make Maven wrapper executable
-        working-directory: apps/server
+        working-directory: backend/spring
         run: chmod +x mvnw
       - name: Run tests
-        working-directory: apps/server
+        working-directory: backend/spring
         run: ./mvnw -B clean test
       - name: Package application
-        working-directory: apps/server
+        working-directory: backend/spring
         run: ./mvnw -B -DskipTests package

@@ -1,0 +1,1 @@
+{"version":"1.0","structure":"tree","operation":"visit","params":{"node":2},"initial_state":{"data":[8,4,12,2,6],"metadata":{"capacity":8}},"source_ref":"example/tree"}

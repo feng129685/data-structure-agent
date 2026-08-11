@@ -1,0 +1,274 @@
+name: ${COMPOSE_PROJECT_NAME:-structify}
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    mem_limit: ${MYSQL_MEMORY_LIMIT:-384m}
+    mem_reservation: ${MYSQL_MEMORY_RESERVATION:-256m}
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?set MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER:?set MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --skip-name-resolve
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    networks:
+      - data
+    security_opt:
+      - no-new-privileges:true
+
+  node:
+    image: ${NODE_IMAGE:?set immutable NODE_IMAGE release tag}
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.node
+      args:
+        NODE_BASE_IMAGE: ${NODE_BASE_IMAGE:-node:22-bookworm-slim}
+    restart: unless-stopped
+    init: true
+    mem_limit: ${NODE_MEMORY_LIMIT:-256m}
+    mem_reservation: ${NODE_MEMORY_RESERVATION:-160m}
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: "--max-old-space-size=${NODE_MAX_OLD_SPACE_MB:-160}"
+      HOST: 0.0.0.0
+      PORT: 8791
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set CORS_ALLOWED_ORIGINS}
+      NODE_COMPAT_JWT_SECRET: ${NODE_COMPAT_JWT_SECRET:?set a strong NODE_COMPAT_JWT_SECRET}
+      DB_PATH: /app/data/data.db
+      KNOWLEDGE_DIR: /app/private/knowledge
+      KNOWLEDGE_DEBUG_API: "false"
+      KNOWLEDGE_SEARCH_LIMIT: ${KNOWLEDGE_SEARCH_LIMIT:-4}
+      KNOWLEDGE_CONTEXT_MAX_CHARS: ${KNOWLEDGE_CONTEXT_MAX_CHARS:-3600}
+      KNOWLEDGE_MIN_SCORE: ${KNOWLEDGE_MIN_SCORE:-8}
+      PRESENTATION_DIR: /app/private/presentation-materials
+      PRESENTATION_ASSET_URL_TTL_SECONDS: ${PRESENTATION_ASSET_URL_TTL_SECONDS:-900}
+      PDF_DIR: /app/pdfs
+      VERIFICATION_CODE_FILE: ""
+      TEACHER_EMAILS: ""
+      ALLOW_FIRST_USER_TEACHER: "false"
+      AUTH_RATE_WINDOW_MS: ${AUTH_RATE_WINDOW_MS:-900000}
+      AUTH_RATE_MAX: ${AUTH_RATE_MAX:-30}
+      CODE_REQUEST_RATE_WINDOW_MS: ${CODE_REQUEST_RATE_WINDOW_MS:-600000}
+      CODE_REQUEST_RATE_MAX: ${CODE_REQUEST_RATE_MAX:-3}
+      CODE_REQUEST_IP_RATE_MAX: ${CODE_REQUEST_IP_RATE_MAX:-12}
+      CODE_MAX_ATTEMPTS: ${CODE_MAX_ATTEMPTS:-5}
+      CODE_LOCK_MS: ${CODE_LOCK_MS:-900000}
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      MODEL_BASE_URL: ${MODEL_BASE_URL:-}
+      MODEL_NAME: ${MODEL_NAME:-}
+      MODEL_TIMEOUT_MS: ${MODEL_TIMEOUT_MS:-45000}
+      MODEL_STREAM_IDLE_TIMEOUT_MS: ${MODEL_STREAM_IDLE_TIMEOUT_MS:-30000}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_CONNECT_HOST: ${SMTP_CONNECT_HOST:-}
+      SMTP_TLS_SERVERNAME: ${SMTP_TLS_SERVERNAME:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      JUDGE0_BASE_URL: ${JUDGE0_BASE_URL:-}
+      PISTON_BASE_URL: ${PISTON_BASE_URL:-}
+      EXECUTE_RATE_WINDOW_MS: ${EXECUTE_RATE_WINDOW_MS:-60000}
+      EXECUTE_RATE_MAX: ${EXECUTE_RATE_MAX:-8}
+      EXECUTE_MAX_CONCURRENCY: ${EXECUTE_MAX_CONCURRENT:-4}
+      EXECUTE_PER_IP_CONCURRENCY: ${EXECUTE_PER_IP_CONCURRENCY:-2}
+      EXECUTE_TIMEOUT_MS: ${EXECUTE_TIMEOUT_MS:-15000}
+      EXECUTE_PROVIDER_TIMEOUT_MS: ${EXECUTE_PROVIDER_TIMEOUT_MS:-8000}
+      EXECUTE_OUTPUT_MAX_CHARS: ${EXECUTE_OUTPUT_MAX_LENGTH:-6000}
+      PDF_UPLOAD_MAX_BYTES: ${PDF_UPLOAD_MAX_BYTES:-26214400}
+      PDF_FILE_MAX_BYTES: ${PDF_FILE_MAX_BYTES:-20971520}
+      PDF_UPLOAD_MAX_FILES: ${PDF_UPLOAD_MAX_FILES:-5}
+      UPLOAD_REQUEST_MAX_BYTES: ${UPLOAD_REQUEST_MAX_BYTES:-22020096}
+    volumes:
+      - node-data:/app/data
+      - node-pdfs:/app/pdfs
+      - ${PDF_SOURCE_DIR_HOST:?set PDF_SOURCE_DIR_HOST}:/app/default-pdfs:ro
+      - ${KNOWLEDGE_DIR_HOST:?set KNOWLEDGE_DIR_HOST}:/app/private/knowledge:ro
+      - ${PRESENTATION_DIR_HOST:?set PRESENTATION_DIR_HOST}:/app/private/presentation-materials:ro
+    ports:
+      - 127.0.0.1:${NODE_HOST_PORT:-18791}:8791
+    expose:
+      - "8791"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8791/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+
+  spring-api:
+    image: ${SPRING_IMAGE:?set immutable SPRING_IMAGE release tag}
+    build:
+      context: ../backend/spring
+      args:
+        JAVA_BUILD_IMAGE: ${JAVA_BUILD_IMAGE:-eclipse-temurin:21-jdk}
+        JAVA_RUNTIME_IMAGE: ${JAVA_RUNTIME_IMAGE:-eclipse-temurin:21-jre}
+    restart: unless-stopped
+    init: true
+    mem_limit: ${SPRING_MEMORY_LIMIT:-384m}
+    mem_reservation: ${SPRING_MEMORY_RESERVATION:-288m}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: 8792
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=true&requireSSL=true
+      DB_USER: ${MYSQL_USER:?set MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}
+      NODE_COMPAT_ENABLED: ${NODE_COMPAT_ENABLED:-true}
+      NODE_COMPAT_JWT_SECRET: ${NODE_COMPAT_JWT_SECRET:?set a strong NODE_COMPAT_JWT_SECRET}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set CORS_ALLOWED_ORIGINS}
+      AUTH_TOKEN_ISSUER: ${AUTH_TOKEN_ISSUER:-structify.cn}
+      AUTH_TOKEN_TTL: ${AUTH_TOKEN_TTL:-PT2H}
+      AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-ds_session}
+      AUTH_COOKIE_SECURE: "true"
+      AUTH_EXPOSE_DEV_CODE: "false"
+      AUTH_MAIL_ENABLED: ${AUTH_MAIL_ENABLED:-false}
+      BOOTSTRAP_ADMIN_EMAIL: ""
+      TEACHER_EMAILS: ""
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      MODEL_BASE_URL: ${MODEL_BASE_URL:-}
+      MODEL_NAME: ${MODEL_NAME:-}
+      MODEL_TIMEOUT: ${MODEL_TIMEOUT:-PT45S}
+      MODEL_STREAM_IDLE_TIMEOUT: ${MODEL_STREAM_IDLE_TIMEOUT:-PT30S}
+      MODEL_MAX_RESPONSE_BYTES: ${MODEL_MAX_RESPONSE_BYTES:-1048576}
+      KNOWLEDGE_DIR: /app/private/knowledge
+      KNOWLEDGE_AUTO_PUBLISH_LOCAL: "false"
+      RESOURCE_DIR: /app/private/course-content
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_AUTH: ${SMTP_AUTH:-true}
+      SMTP_SSL: ${SMTP_SSL:-true}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      SMTP_STARTTLS_REQUIRED: ${SMTP_STARTTLS_REQUIRED:-false}
+      SMTP_SSL_CHECK_SERVER_IDENTITY: ${SMTP_SSL_CHECK_SERVER_IDENTITY:-true}
+      SMTP_CONNECTION_TIMEOUT_MS: ${SMTP_CONNECTION_TIMEOUT_MS:-5000}
+      SMTP_READ_TIMEOUT_MS: ${SMTP_READ_TIMEOUT_MS:-10000}
+      SMTP_WRITE_TIMEOUT_MS: ${SMTP_WRITE_TIMEOUT_MS:-10000}
+      PISTON_BASE_URL: ${PISTON_BASE_URL:-}
+      EXECUTE_TIMEOUT: ${EXECUTE_TIMEOUT:-PT15S}
+      EXECUTE_CODE_MAX_LENGTH: ${EXECUTE_CODE_MAX_LENGTH:-20000}
+      EXECUTE_INPUT_MAX_LENGTH: ${EXECUTE_INPUT_MAX_LENGTH:-12000}
+      EXECUTE_OUTPUT_MAX_LENGTH: ${EXECUTE_OUTPUT_MAX_LENGTH:-6000}
+      EXECUTE_MAX_CONCURRENT: ${EXECUTE_MAX_CONCURRENT:-4}
+      EXECUTE_MAX_CONCURRENT_PER_CLIENT: ${EXECUTE_MAX_CONCURRENT_PER_CLIENT:-1}
+      EXECUTE_COMPILE_TIMEOUT_MS: ${EXECUTE_COMPILE_TIMEOUT_MS:-10000}
+      EXECUTE_RUN_TIMEOUT_MS: ${EXECUTE_RUN_TIMEOUT_MS:-3000}
+    volumes:
+      - ${KNOWLEDGE_DIR_HOST:?set KNOWLEDGE_DIR_HOST}:/app/private/knowledge:ro
+      - ${RESOURCE_DIR_HOST:?set RESOURCE_DIR_HOST}:/app/private/course-content:ro
+    ports:
+      - 127.0.0.1:${SPRING_HOST_PORT:-18792}:8792
+    expose:
+      - "8792"
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+      - data
+
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2.10-alpine}
+    profiles:
+      - container-caddy
+    restart: unless-stopped
+    mem_limit: ${CADDY_MEMORY_LIMIT:-64m}
+    mem_reservation: ${CADDY_MEMORY_RESERVATION:-64m}
+    depends_on:
+      node:
+        condition: service_healthy
+      spring-api:
+        condition: service_started
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      # A non-empty host directory selects Origin CA mode. The directory is
+      # never copied into the image and is mounted read-only below.
+      ORIGIN_CERT_DIR_HOST: ${ORIGIN_CERT_DIR_HOST:-}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        if [ -n "$${ORIGIN_CERT_DIR_HOST}" ]; then
+          export CADDY_TLS_DIRECTIVE="tls /etc/caddy/origin-ca/origin.crt /etc/caddy/origin-ca/origin.key"
+          export CADDY_EMAIL_DIRECTIVE=""
+        else
+          : "$${ACME_EMAIL:?ACME_EMAIL is required when ORIGIN_CERT_DIR_HOST is empty}"
+          # Cloudflare proxying can prevent the ACME TLS-ALPN validation path
+          # from reaching this dedicated origin. HTTP-01 is still served by
+          # Caddy on port 80, so make that verified path the only ACME solver.
+          export CADDY_TLS_DIRECTIVE='tls {
+            issuer acme {
+              disable_tlsalpn_challenge
+            }
+          }'
+          export CADDY_EMAIL_DIRECTIVE="email $${ACME_EMAIL}"
+        fi
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    volumes:
+      - ${CADDY_CONFIG_DIR_HOST:-/srv/structify/caddy}:/etc/caddy:ro
+      - caddy-data:/data
+      - caddy-config:/config
+      - ${ORIGIN_CERT_DIR_HOST:-caddy-origin-ca-empty}:/etc/caddy/origin-ca:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+
+volumes:
+  mysql-data:
+  node-data:
+  node-pdfs:
+  caddy-data:
+  caddy-config:
+  # Empty fallback keeps the Origin CA mount valid while preserving ACME mode.
+  caddy-origin-ca-empty:
+
+networks:
+  edge:
+  data:
+    internal: true

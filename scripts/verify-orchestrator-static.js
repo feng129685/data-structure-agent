@@ -1,8 +1,8 @@
 const fs = require("fs");
 const path = require("path");
 
-const htmlPath = path.join(__dirname, "..", "prototype.html");
-const indexPath = path.join(__dirname, "..", "index.html");
+const htmlPath = path.join(__dirname, "..", "frontend", "prototype.html");
+const indexPath = path.join(__dirname, "..", "frontend", "index.html");
 const html = fs.readFileSync(htmlPath, "utf8");
 const index = fs.readFileSync(indexPath, "utf8");
 

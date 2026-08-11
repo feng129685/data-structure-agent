@@ -2,8 +2,8 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
-const html = fs.readFileSync(path.join(root, "prototype.html"), "utf8");
-const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
+const html = fs.readFileSync(path.join(root, "frontend", "prototype.html"), "utf8");
+const server = fs.readFileSync(path.join(root, "backend", "node", "server.js"), "utf8");
 
 const htmlMarkers = [
   "function getTeacherTaskRows",

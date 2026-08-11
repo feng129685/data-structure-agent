@@ -1,0 +1,9 @@
+CREATE TABLE model_configurations (
+    id BIGINT PRIMARY KEY,
+    provider VARCHAR(128) NOT NULL,
+    base_url VARCHAR(2048) NOT NULL,
+    model_name VARCHAR(512) NOT NULL,
+    api_key_ciphertext LONGTEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

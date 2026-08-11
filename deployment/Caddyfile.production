@@ -1,0 +1,146 @@
+{
+    # Docker publishes only 80/443. This endpoint remains container-local so
+    # deploy.sh can inspect and reload the running Caddy configuration.
+    admin 127.0.0.1:2019
+
+    # The container command sets this to `email <operator-address>` for the
+    # default ACME path, or leaves it empty when an Origin CA pair is mounted.
+    {$CADDY_EMAIL_DIRECTIVE}
+}
+
+# Keep the alternate host explicit so certificates cover it and all traffic
+# lands on the canonical origin used by cookies and CORS.
+www.structify.cn {
+    # In Origin CA mode the same certificate must cover both hostnames. In
+    # ACME mode this line expands to an empty line and keeps automatic HTTPS.
+    {$CADDY_TLS_DIRECTIVE}
+    redir https://structify.cn{uri} permanent
+}
+
+(structify_routes) {
+    encode zstd gzip
+
+    log {
+        output stdout
+        format json
+    }
+
+    # HSTS is deliberately omitted until the domain owner confirms every
+    # current and future subdomain is HTTPS-only.
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "same-origin"
+        -Server
+    }
+
+    # Spring owns the API CORS policy, but the proxy is also the browser-facing
+    # boundary. Preserve the same exact-origin policy here so response headers
+    # survive the proxy and browser preflights do not reach authenticated routes.
+    @cors_actual_public {
+        header Origin https://structify.cn
+        path /api/* /presentation/*
+    }
+    header @cors_actual_public {
+        defer
+        Access-Control-Allow-Origin "https://structify.cn"
+        Access-Control-Allow-Credentials "true"
+        Access-Control-Expose-Headers "X-Request-Id"
+        +Vary "Origin"
+    }
+    @cors_actual_admin {
+        header Origin https://admin.structify.cn
+        path /api/* /presentation/*
+    }
+    header @cors_actual_admin {
+        defer
+        Access-Control-Allow-Origin "https://admin.structify.cn"
+        Access-Control-Allow-Credentials "true"
+        Access-Control-Expose-Headers "X-Request-Id"
+        +Vary "Origin"
+    }
+
+    route {
+        @cors_preflight_public {
+            method OPTIONS
+            header Origin https://structify.cn
+            header Access-Control-Request-Method *
+            path /api/* /presentation/*
+        }
+        handle @cors_preflight_public {
+            header {
+                Access-Control-Allow-Origin "https://structify.cn"
+                Access-Control-Allow-Credentials "true"
+                Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS"
+                Access-Control-Allow-Headers "Authorization, Content-Type, X-Request-Id"
+                Access-Control-Max-Age "3600"
+                Vary "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+            }
+            respond "" 204
+        }
+        @cors_preflight_admin {
+            method OPTIONS
+            header Origin https://admin.structify.cn
+            header Access-Control-Request-Method *
+            path /api/* /presentation/*
+        }
+        handle @cors_preflight_admin {
+            header {
+                Access-Control-Allow-Origin "https://admin.structify.cn"
+                Access-Control-Allow-Credentials "true"
+                Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS"
+                Access-Control-Allow-Headers "Authorization, Content-Type, X-Request-Id"
+                Access-Control-Max-Age "3600"
+                Vary "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+            }
+            respond "" 204
+        }
+
+        # Spring's only streaming browser endpoint is SSE. Immediate flushing
+        # prevents proxy buffering and preserves named SSE event boundaries.
+        @spring_sse path /api/v1/chat/stream
+        handle @spring_sse {
+            reverse_proxy spring-api:8792 {
+                flush_interval -1
+            }
+        }
+
+        @spring_api path /api/v1/*
+        handle @spring_api {
+            reverse_proxy spring-api:8792
+        }
+
+        # Never serve this directory from Caddy. Node validates either the JWT
+        # or the short-lived HMAC signature and confines paths to rendered media.
+        @presentation path /presentation/*
+        handle @presentation {
+            reverse_proxy node:8791
+        }
+
+        # POST /api/chat may return SSE on the same legacy path, so disable
+        # response buffering for the compatibility API as a whole.
+        @legacy_api path /api/*
+        handle @legacy_api {
+            reverse_proxy node:8791 {
+                flush_interval -1
+            }
+        }
+
+        # Root HTML, public PDFs, and the small vendored browser asset stay on
+        # the Node compatibility service until frontend migration is complete.
+        handle {
+            reverse_proxy node:8791
+        }
+    }
+}
+
+structify.cn {
+    {$CADDY_TLS_DIRECTIVE}
+    import structify_routes
+}
+
+# The management frontend shares the same release bundle and API routes. The
+# Spring API remains the authority for administrator authentication and roles.
+admin.structify.cn {
+    {$CADDY_TLS_DIRECTIVE}
+    import structify_routes
+}

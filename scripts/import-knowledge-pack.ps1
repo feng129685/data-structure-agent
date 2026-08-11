@@ -14,7 +14,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $resolvedZip = (Resolve-Path -LiteralPath $ZipPath).Path
 if (-not $Destination) {
-  $Destination = Join-Path $repoRoot "knowledge\private\textbook"
+  $Destination = Join-Path $repoRoot "private\knowledge"
 } elseif (-not [System.IO.Path]::IsPathRooted($Destination)) {
   $Destination = Join-Path $repoRoot $Destination
 }

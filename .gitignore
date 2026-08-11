@@ -9,17 +9,40 @@
 data.db
 data.db-shm
 data.db-wal
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
 
 # === Dependencies ===
 node_modules/
-apps/server/target/
+backend/spring/target/
+backend/node/.env
+backend/node/.jwt-secret
+backend/node/data.db
+backend/node/data.db-shm
+backend/node/data.db-wal
 
 # === User Uploads ===
 uploads/
 
 # === Private Course Knowledge ===
 # Full textbook OCR may be copyrighted and must not be pushed to the public repository.
+private/
 knowledge/private/
+lesson-materials/
+presentation-materials/
+teach_ppt/
+pdfs/
+
+# === Local Build / Browser Artifacts ===
+# Rendered PPT output and browser traces are local evidence, not release inputs.
+output/
+.playwright-cli/
+__pycache__/
+*.py[cod]
 
 # === Logs ===
 *.log
@@ -54,8 +77,18 @@ audit-current-report.json
 update-server.sh
 Caddyfile.remote
 
+# === Local deployment answers and working notes ===
+docs/production-input-checklist.md
+docs/production-input-response-review.md
+docs/private-resource-inventory.local.md
+docs/superpowers/
+task_plan.md
+findings.md
+progress.md
+
 # === AI Tool Config ===
 .superpowers/
+.codegraph/
 
 # === OS & Editor ===
 .DS_Store

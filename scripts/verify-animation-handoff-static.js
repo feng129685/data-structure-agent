@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
+const frontendRoot = path.join(root, "frontend");
 const files = ["prototype.html", "index.html"];
 
 const markers = [
@@ -14,7 +15,8 @@ const markers = [
   "sendAnimationRequest(scenario, { seed })",
   "sendAnimationRequest(targetScenario, { seed: userMessage })",
   "sendAnimationRequest(targetScenario, { seed: animationSeed })",
-  "commitAnimationResult(animationData, handoff.type, { handoff })",
+  "commitAnimationResult(springAnimation, handoff.type, { handoff, recordId",
+  "commitAnimationResult(parsedAnimation, handoff.type, { handoff, recordId",
   "state.animationHandoff = handoff",
   "请优先围绕「${handoff.title}」设计步骤。",
   "观察重点：${handoff.focus}",
@@ -36,7 +38,7 @@ const operationMarkers = [
 const failures = [];
 
 for (const file of files) {
-  const text = fs.readFileSync(path.join(root, file), "utf8");
+  const text = fs.readFileSync(path.join(frontendRoot, file), "utf8");
   const missing = markers.filter((marker) => !text.includes(marker));
   const missingOperations = operationMarkers.filter((marker) => !text.includes(marker));
   if (missing.length || missingOperations.length) {

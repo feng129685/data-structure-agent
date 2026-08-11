@@ -2,10 +2,13 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
+const { waitForCapturedCode } = require("./verification-code-fixture");
 
 const root = path.join(__dirname, "..");
+const nodeRoot = path.join(root, "backend", "node");
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ds-learning-snapshot-"));
 const dbPath = path.join(tmpDir, "test.db");
+const verificationCodeFile = path.join(tmpDir, "verification-codes.jsonl");
 const port = 18971 + Math.floor(Math.random() * 1000);
 const baseUrl = `http://127.0.0.1:${port}`;
 
@@ -26,17 +29,6 @@ async function waitForServer(child) {
   throw new Error("server did not become ready");
 }
 
-async function waitForDevCode(stdoutRef, email) {
-  const deadline = Date.now() + 8_000;
-  const pattern = new RegExp(`for ${email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: (\\d{6})`);
-  while (Date.now() < deadline) {
-    const match = stdoutRef.value.match(pattern);
-    if (match) return match[1];
-    await wait(150);
-  }
-  throw new Error("verification code was not logged by dev mail transport");
-}
-
 async function jsonFetch(url, options = {}) {
   const res = await fetch(url, {
     ...options,
@@ -52,7 +44,7 @@ async function jsonFetch(url, options = {}) {
 
 (async () => {
   const child = spawn(process.execPath, ["server.js"], {
-    cwd: root,
+    cwd: nodeRoot,
     env: {
       ...process.env,
       HOST: "127.0.0.1",
@@ -63,7 +55,9 @@ async function jsonFetch(url, options = {}) {
       SMTP_HOST: "",
       SMTP_USER: "",
       SMTP_PASS: "",
-      SMTP_FROM: ""
+      SMTP_FROM: "",
+      NODE_ENV: "test",
+      VERIFICATION_CODE_FILE: verificationCodeFile
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -81,7 +75,7 @@ async function jsonFetch(url, options = {}) {
       method: "POST",
       body: JSON.stringify({ email, purpose: "register" })
     });
-    const code = await waitForDevCode(stdoutRef, email);
+    const { code } = await waitForCapturedCode(verificationCodeFile, email);
     const reg = await jsonFetch(`${baseUrl}/api/auth/register`, {
       method: "POST",
       body: JSON.stringify({ email, password, code })

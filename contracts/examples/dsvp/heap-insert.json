@@ -1,0 +1,1 @@
+{"version":"1.0","structure":"heap","operation":"insert","params":{"value":1,"capacity":8},"initial_state":{"data":[2,5],"metadata":{"capacity":8}},"source_ref":"example/heap"}
