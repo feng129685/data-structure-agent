@@ -58,7 +58,12 @@ public class AiQuotaExecutionService implements AiQuotaExecution {
         try {
             response = model.complete(request);
         } catch (ModelClientException error) {
-            settleFailure(attempt.reservation(), error.code(), failedUsage(attempt.reservation(), error.consumedTokens(), false), error);
+            settleFailure(
+                attempt.reservation(),
+                error.code(),
+                failedUsage(attempt.reservation(), error.consumedTokens(), null, false),
+                error
+            );
             throw error;
         } catch (RuntimeException error) {
             settleFailure(attempt.reservation(), "AI_MODEL_EXECUTION_FAILED", noUsage(), error);
@@ -97,23 +102,37 @@ public class AiQuotaExecutionService implements AiQuotaExecution {
 
         StreamProgress progress = new StreamProgress();
         try {
-            model.stream(request, content -> {
-                if (content != null && !content.isEmpty()) {
-                    progress.receivedContent = true;
+            model.stream(request, new ModelStreamHandler() {
+                @Override
+                public void onContent(String content) {
+                    if (content != null && !content.isEmpty()) {
+                        progress.receivedContent = true;
+                    }
+                    handler.onContent(content);
                 }
-                handler.onContent(content);
+
+                @Override
+                public void onUsage(Long totalTokens) {
+                    if (totalTokens != null && totalTokens >= 0) {
+                        progress.reportedTokens = totalTokens;
+                    }
+                    handler.onUsage(totalTokens);
+                }
             });
-            // ModelStreamHandler has no final usage callback, so settle the bounded reservation estimate.
-            ledger.settle(
-                attempt.reservation().id(),
-                attempt.reservation().estimatedTokens(),
-                AiQuotaUsageSource.RESERVATION_ESTIMATE
-            );
+            Usage usage = progress.reportedTokens == null
+                ? new Usage(attempt.reservation().estimatedTokens(), AiQuotaUsageSource.RESERVATION_ESTIMATE)
+                : new Usage(progress.reportedTokens, AiQuotaUsageSource.PROVIDER_REPORTED);
+            ledger.settle(attempt.reservation().id(), usage.tokens(), usage.source());
         } catch (ModelClientException error) {
             settleFailure(
                 attempt.reservation(),
                 error.code(),
-                failedUsage(attempt.reservation(), error.consumedTokens(), progress.receivedContent),
+                failedUsage(
+                    attempt.reservation(),
+                    error.consumedTokens(),
+                    progress.reportedTokens,
+                    progress.receivedContent
+                ),
                 error
             );
             throw error;
@@ -123,7 +142,7 @@ public class AiQuotaExecutionService implements AiQuotaExecution {
                 error instanceof AiStreamAbortedException
                     ? "AI_STREAM_CLIENT_DISCONNECTED"
                     : "AI_STREAM_EXECUTION_FAILED",
-                failedUsage(attempt.reservation(), null, progress.receivedContent),
+                failedUsage(attempt.reservation(), null, progress.reportedTokens, progress.receivedContent),
                 error
             );
             throw error;
@@ -204,9 +223,17 @@ public class AiQuotaExecutionService implements AiQuotaExecution {
         }
     }
 
-    private Usage failedUsage(AiQuotaReservation reservation, Long reportedTokens, boolean receivedContent) {
-        if (reportedTokens != null && reportedTokens >= 0) {
-            return new Usage(reportedTokens, AiQuotaUsageSource.PROVIDER_REPORTED);
+    private Usage failedUsage(
+        AiQuotaReservation reservation,
+        Long errorReportedTokens,
+        Long streamedReportedTokens,
+        boolean receivedContent
+    ) {
+        if (streamedReportedTokens != null && streamedReportedTokens >= 0) {
+            return new Usage(streamedReportedTokens, AiQuotaUsageSource.PROVIDER_REPORTED);
+        }
+        if (errorReportedTokens != null && errorReportedTokens >= 0) {
+            return new Usage(errorReportedTokens, AiQuotaUsageSource.PROVIDER_REPORTED);
         }
         if (receivedContent) {
             return new Usage(reservation.estimatedTokens(), AiQuotaUsageSource.RESERVATION_ESTIMATE);
@@ -233,6 +260,7 @@ public class AiQuotaExecutionService implements AiQuotaExecution {
 
     private static final class StreamProgress {
         private boolean receivedContent;
+        private Long reportedTokens;
     }
 
     public record Availability(

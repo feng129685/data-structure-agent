@@ -203,9 +203,10 @@ paths:
       tags: [Knowledge]
       summary: Search reviewed, audience-visible knowledge
       description: >
-        Guest-compatible read-only retrieval. Only knowledge chunks with
-        `PUBLISHED` review status and a published parent chapter/resource are
-        indexed. Guests see `PUBLIC`; authenticated students see
+        Guest-compatible read-only retrieval. Only `VERIFIED` knowledge chunks
+        with a complete `VERIFIED` resource source chain in a published chapter
+        are indexed. Merely `PUBLISHED`, legacy-unverified, draft, and excluded
+        material is not AI/search eligible. Guests see `PUBLIC`; authenticated students see
         `PUBLIC` and `CLASSROOM_ONLY`; `TEACHER` and `ADMIN` also see
         `TEAM_ONLY`. The server normalizes whitespace, requires a non-blank
         query of at most 500 characters, and accepts an optional chapter
@@ -264,7 +265,7 @@ paths:
       tags: [Chat]
       summary: Complete a course-grounded chat turn
       security: [{cookieAuth: []}, {bearerAuth: []}]
-      description: Formal course-grounded generation requires an authenticated active user, published authorized evidence, and an enabled model with an available daily token quota. The request is metered through an idempotent reservation and settled with provider usage when available, otherwise the reservation estimate.
+      description: Formal course-grounded generation requires an authenticated active user, verified authorized evidence with a complete source chain, and an enabled model with an available daily token quota. The request is metered through an idempotent reservation and settled with provider usage when available, otherwise the reservation estimate.
       requestBody:
         required: true
         content:
@@ -288,7 +289,7 @@ paths:
       tags: [Chat]
       summary: Stream a course-grounded chat turn
       security: [{cookieAuth: []}, {bearerAuth: []}]
-      description: Formal generation requires an authenticated active user and the same published-evidence and quota gate as POST /chat. After the request is accepted, the response is an SSE stream with named sources, delta, done, and error events. The server releases the reservation and concurrency slot when the upstream fails, the stream times out, or the client disconnects.
+      description: Formal generation requires an authenticated active user and the same verified-evidence and quota gate as POST /chat. After the request is accepted, the response is an SSE stream with named sources, delta, done, and error events. The server releases the reservation and concurrency slot when the upstream fails, the stream times out, or the client disconnects.
       requestBody:
         required: true
         content:
@@ -530,6 +531,32 @@ paths:
         '429': {$ref: '#/components/responses/TooManyRequests'}
         '502': {$ref: '#/components/responses/BadGateway'}
         '504': {$ref: '#/components/responses/GatewayTimeout'}
+  /code/run:
+    post:
+      tags: [Code]
+      summary: Run C or Python through the configured Piston sandbox (deprecated alias)
+      description: Deprecated compatibility alias for `/code/runs`. New clients must call the plural resource path. It has the same guest-or-authenticated access boundary, request validation, rate limit, and response shape as `/code/runs`.
+      deprecated: true
+      security:
+        - {}
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CodeRunRequest'}
+      responses:
+        '200':
+          description: Bounded compiler output
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CodeRunResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '502': {$ref: '#/components/responses/BadGateway'}
+        '504': {$ref: '#/components/responses/GatewayTimeout'}
   /code/analyze:
     post:
       tags: [Code]
@@ -602,7 +629,7 @@ paths:
       summary: Return authenticated generation readiness without calling a model
       description: >-
         The result is derived from the current server-side model configuration and only
-        published, authorized evidence. `operation` defaults to `CHAT`; `CHAT`
+        verified, authorized evidence with a complete source chain. `operation` defaults to `CHAT`; `CHAT`
         requires eligible evidence, while `CODE_ANALYSIS` and
         `ANIMATION_GENERATION` do not. A false allowFormalGeneration value must be
         treated as a hard server-side generation gate. Unsupported operation values
@@ -612,16 +639,18 @@ paths:
         - name: operation
           in: query
           required: false
-          description: Canonical generation operation. The server normalizes case and hyphen spelling before validation.
-          schema: {type: string, maxLength: 64, enum: [CHAT, CODE_ANALYSIS, ANIMATION_GENERATION], default: CHAT}
+          description: Canonical generation operation. Omission defaults to CHAT. A supplied value must be non-blank, at most 64 characters, and match CHAT, CODE_ANALYSIS, or ANIMATION_GENERATION after case and hyphen normalization.
+          schema: {type: string, minLength: 1, maxLength: 64, pattern: '.*\\S.*', enum: [CHAT, CODE_ANALYSIS, ANIMATION_GENERATION], default: CHAT}
         - name: chapterId
           in: query
           required: false
-          schema: {type: string, maxLength: 64}
+          description: Optional evidence scope. When supplied it must be non-blank and at most 64 characters.
+          schema: {type: string, minLength: 1, maxLength: 64, pattern: '.*\\S.*'}
         - name: prompt
           in: query
           required: false
-          schema: {type: string, maxLength: 4000}
+          description: Optional evidence query. When supplied it must be non-blank and at most 4000 characters.
+          schema: {type: string, minLength: 1, maxLength: 4000, pattern: '.*\\S.*'}
       responses:
         '200':
           description: Current readiness and non-sensitive blocking reasons
@@ -934,7 +963,7 @@ paths:
     patch:
       tags: [Admin]
       summary: Change review status and audit the transition
-      description: A VERIFIED transition is rejected when its source chain is not complete and published.
+      description: A VERIFIED transition is rejected when its source chain is not complete and VERIFIED. The linked chapter must also be PUBLISHED.
       security: [{cookieAuth: []}, {bearerAuth: []}]
       parameters:
         - {$ref: '#/components/parameters/ReviewType'}
@@ -1295,7 +1324,7 @@ components:
           items: {$ref: '#/components/schemas/ChatTurn'}
     ChatSource:
       type: object
-      required: [id, chapterId, title, content, source, score]
+      required: [id, chapterId, title, content, source, score, evidenceHash]
       properties:
         id: {type: string}
         chapterId: {type: string}
@@ -1304,6 +1333,10 @@ components:
         source: {type: string}
         pageLabel: {type: string, nullable: true}
         score: {type: number, format: double}
+        evidenceHash:
+          type: string
+          minLength: 1
+          description: Hash bound to the source content or version used for this evidence result.
     ChatResponse:
       type: object
       required: [answer, sources, persisted]

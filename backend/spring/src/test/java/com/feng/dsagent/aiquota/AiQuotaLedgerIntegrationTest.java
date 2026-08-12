@@ -39,6 +39,9 @@ class AiQuotaLedgerIntegrationTest {
     @Autowired
     private MutableClock clock;
 
+    @Autowired
+    private AiQuotaReservationRecoveryRunner recoveryRunner;
+
     @BeforeEach
     void resetLedger() {
         jdbc.update("DELETE FROM ai_quota_reservations");
@@ -109,6 +112,22 @@ class AiQuotaLedgerIntegrationTest {
     }
 
     @Test
+    void dailyQuotaAllowsTheExactBoundaryThenRejectsAnotherReservation() {
+        long userId = userId();
+        AiQuotaReservation reserved = ledger.reserve(request(userId, 100, 100, 2, "daily-boundary", Duration.ofMinutes(5)));
+
+        AiQuotaReservation settled = ledger.settle(reserved.id(), 100, AiQuotaUsageSource.PROVIDER_REPORTED);
+
+        assertThat(settled.status()).isEqualTo(AiQuotaReservationStatus.SETTLED);
+        assertThat(ledger.account(userId).consumedTokens()).isEqualTo(100);
+        assertThat(ledger.account(userId).remainingTokens()).isZero();
+        assertThatThrownBy(() -> ledger.reserve(request(userId, 100, 1, 2, "daily-after-boundary", Duration.ofMinutes(5))))
+            .isInstanceOfSatisfying(ApiException.class, error ->
+                assertThat(error.code()).isEqualTo("AI_QUOTA_EXHAUSTED")
+            );
+    }
+
+    @Test
     void expiredReservationsAreRecoveredAndNoLongerBlockTheUser() {
         long userId = userId();
         AiQuotaReservation reserved = ledger.reserve(request(userId, 100, 40, 1, "stream-1", Duration.ofMinutes(1)));
@@ -124,6 +143,25 @@ class AiQuotaLedgerIntegrationTest {
         assertThat(ledger.account(userId).activeReservations()).isZero();
         assertThat(ledger.reserve(request(userId, 100, 40, 1, "stream-2", Duration.ofMinutes(1))).status())
             .isEqualTo(AiQuotaReservationStatus.RESERVED);
+    }
+
+    @Test
+    void startupRecoveryClearsExpiredReservationsIdempotently() throws Exception {
+        long userId = userId();
+        AiQuotaReservation reserved = ledger.reserve(request(userId, 100, 40, 1, "startup-stream", Duration.ofMinutes(1)));
+        clock.advance(Duration.ofMinutes(2));
+
+        recoveryRunner.run(null);
+        recoveryRunner.run(null);
+
+        assertThat(ledger.findReservation(reserved.id()))
+            .hasValueSatisfying(expired -> {
+                assertThat(expired.status()).isEqualTo(AiQuotaReservationStatus.EXPIRED);
+                assertThat(expired.failureCode()).isEqualTo("AI_QUOTA_RESERVATION_EXPIRED");
+                assertThat(expired.usageSource()).isEqualTo(AiQuotaUsageSource.NO_USAGE_REPORTED);
+            });
+        assertThat(ledger.account(userId).reservedTokens()).isZero();
+        assertThat(ledger.account(userId).activeReservations()).isZero();
     }
 
     @Test

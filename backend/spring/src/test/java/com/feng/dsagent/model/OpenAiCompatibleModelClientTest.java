@@ -115,6 +115,61 @@ class OpenAiCompatibleModelClientTest {
 
         assertThat(fragments).containsExactly("push", " then pop");
         assertThat(requestBody.get().path("stream").asBoolean()).isTrue();
+        assertThat(requestBody.get().path("stream_options").path("include_usage").asBoolean()).isTrue();
+    }
+
+    @Test
+    void streamsProviderUsageFromTheFinalSseChunkBeforeDone() throws Exception {
+        URI baseUrl = startServer("/chat/completions", exchange ->
+            respond(exchange, 200, "text/event-stream", """
+                data: {"choices":[{"delta":{"content":"push"}}]}
+
+                data: {"choices":[],"usage":{"total_tokens":41}}
+
+                data: [DONE]
+
+                """)
+        );
+        ModelClient client = client(baseUrl, API_KEY, Duration.ofSeconds(2), Duration.ofSeconds(2));
+        List<String> fragments = new ArrayList<>();
+        List<Long> usages = new ArrayList<>();
+
+        client.stream(
+            new ModelRequest(List.of(new ModelMessage("user", "Show stack operations."))),
+            new ModelStreamHandler() {
+                @Override
+                public void onContent(String content) {
+                    fragments.add(content);
+                }
+
+                @Override
+                public void onUsage(Long totalTokens) {
+                    usages.add(totalTokens);
+                }
+            }
+        );
+
+        assertThat(fragments).containsExactly("push");
+        assertThat(usages).containsExactly(41L);
+    }
+
+    @Test
+    void reportsProviderUsageFromANonSuccessStreamingResponseWithoutExposingTheBody() throws Exception {
+        URI baseUrl = startServer("/chat/completions", exchange ->
+            respond(exchange, 429, "application/json", """
+                {"usage":{"total_tokens":29},"error":{"message":"private provider diagnostic"}}
+                """)
+        );
+        ModelClient client = client(baseUrl, API_KEY, Duration.ofSeconds(2), Duration.ofSeconds(2));
+
+        ModelClientException error = catchThrowableOfType(
+            () -> client.stream(new ModelRequest(List.of(new ModelMessage("user", "Show stack operations."))), ignored -> { }),
+            ModelClientException.class
+        );
+
+        assertThat(error.code()).isEqualTo("MODEL_UPSTREAM_ERROR");
+        assertThat(error.consumedTokens()).isEqualTo(29L);
+        assertThat(error.getMessage()).doesNotContain("private provider diagnostic", API_KEY);
     }
 
     @Test

@@ -1,4 +1,5 @@
 import type { ApiError } from "../types/api";
+import { resolveApiBaseUrl } from "./base-url";
 
 export type { ApiError } from "../types/api";
 
@@ -169,6 +170,7 @@ export class ApiClientError extends Error implements ApiError {
 
 export interface ParseSseOptions<T> {
   parseData?: (data: string) => T;
+  signal?: AbortSignal;
 }
 
 /**
@@ -182,6 +184,7 @@ export async function* parseSseStream<T = unknown>(
   if (!stream) return;
 
   const reader = stream.getReader();
+  let abortHandler: (() => void) | undefined;
   const decoder = new TextDecoder();
   let buffer = "";
   let eventName = "";
@@ -252,6 +255,19 @@ export async function* parseSseStream<T = unknown>(
     return undefined;
   };
 
+  const cancelReader = () => {
+    void reader.cancel().catch(() => undefined);
+  };
+
+  if (options.signal) {
+    if (options.signal.aborted) {
+      cancelReader();
+    } else {
+      abortHandler = cancelReader;
+      options.signal.addEventListener("abort", abortHandler, { once: true });
+    }
+  }
+
   try {
     while (true) {
       const chunk = await reader.read();
@@ -282,6 +298,11 @@ export async function* parseSseStream<T = unknown>(
     const finalEvent = dispatch();
     if (finalEvent) yield finalEvent;
   } finally {
+    if (abortHandler && options.signal) {
+      options.signal.removeEventListener("abort", abortHandler);
+    }
+    await reader.cancel().catch(() => undefined);
+    reset();
     reader.releaseLock();
   }
 }
@@ -399,7 +420,7 @@ export function parseApiError(
 }
 
 export function createApiClient(options: ApiClientOptions = {}) {
-  const baseUrl = options.baseUrl ?? "/api/v1";
+  const baseUrl = options.baseUrl ?? resolveApiBaseUrl();
   const fetcher = options.fetcher ?? ((...args: Parameters<typeof fetch>) => globalThis.fetch(...args));
   const defaultCredentials = options.credentials ?? "include";
   const requestIdFactory = options.requestIdFactory ?? createRequestId;
@@ -466,7 +487,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
         status: response.status,
         headers: responseHeaders,
         stream: response.body,
-        events: parseSseStream(response.body, sseOptions),
+        events: parseSseStream(response.body, { ...sseOptions, signal: init.signal ?? undefined }),
       } as SseApiResponse<T>;
     }
     if (effectiveType === "binary") {

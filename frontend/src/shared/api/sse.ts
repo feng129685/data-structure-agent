@@ -1,93 +1,112 @@
-import type { ChatSource, SseEvent } from "../types";
+import { parseSseStream, parseSseText as parseWireSseText, type SseEvent as WireSseEvent } from "./client";
+import type { ChatResponse, ChatSource, SseEvent as ChatSseEvent } from "../types";
 
-function parseJson<T>(value: string): T | string {
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return value;
+const CHAT_EVENT_NAMES = new Set(["sources", "delta", "done", "error"]);
+
+export class ChatSseProtocolError extends Error {
+  readonly code = "INVALID_SSE_EVENT";
+  readonly event: string;
+
+  constructor(event: string) {
+    super(`Invalid payload for SSE event: ${event}`);
+    this.name = "ChatSseProtocolError";
+    this.event = event;
+    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 
-function normalizeEvent(event: string, raw: unknown): SseEvent | null {
-  const data = raw && typeof raw === "object" ? raw as Record<string, unknown> : raw;
-  if (event === "sources") {
-    const sources = Array.isArray(data) ? data : (data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).sources) ? (data as Record<string, unknown>).sources : []);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseKnownEventData(event: WireSseEvent<unknown>): unknown {
+  if (event.parsed !== undefined) return event.parsed;
+  try {
+    return JSON.parse(event.data);
+  } catch {
+    throw new ChatSseProtocolError(event.event);
+  }
+}
+
+function isChatSource(value: unknown): value is ChatSource {
+  if (!isRecord(value)) return false;
+  return typeof value.id === "string"
+    && typeof value.chapterId === "string"
+    && typeof value.title === "string"
+    && typeof value.content === "string"
+    && typeof value.source === "string"
+    && (value.pageLabel === null || typeof value.pageLabel === "string" || value.pageLabel === undefined)
+    && typeof value.score === "number"
+    && Number.isFinite(value.score)
+    && typeof value.evidenceHash === "string"
+    && value.evidenceHash.length > 0;
+}
+
+function isChatResponse(value: unknown): value is ChatResponse {
+  if (!isRecord(value)) return false;
+  return typeof value.answer === "string"
+    && (value.sessionId === null || typeof value.sessionId === "string" || value.sessionId === undefined)
+    && Array.isArray(value.sources)
+    && value.sources.every(isChatSource)
+    && typeof value.persisted === "boolean";
+}
+
+function normalizeEvent(event: WireSseEvent<unknown>): ChatSseEvent | null {
+  if (!CHAT_EVENT_NAMES.has(event.event)) return null;
+  const data = parseKnownEventData(event);
+  if (event.event === "sources") {
+    const sources = Array.isArray(data)
+      ? data
+      : isRecord(data) && Array.isArray(data.sources)
+        ? data.sources
+        : null;
+    if (!sources || !sources.every(isChatSource)) throw new ChatSseProtocolError(event.event);
     return { event: "sources", data: Array.isArray(data) ? sources as ChatSource[] : { sources: sources as ChatSource[] } };
   }
-  if (event === "delta") {
-    if (typeof data === "string") return { event: "delta", data: { content: data } };
-    return { event: "delta", data: (data || {}) as { content?: string; delta?: string } };
+  if (event.event === "delta") {
+    if (!isRecord(data)
+      || (typeof data.content !== "string" && typeof data.delta !== "string")) {
+      throw new ChatSseProtocolError(event.event);
+    }
+    return { event: "delta", data: data as { content?: string; delta?: string } };
   }
-  if (event === "done") return { event: "done", data: (data || {}) as { sessionId?: string | null; persisted?: boolean; answer?: string } };
-  if (event === "error") return { event: "error", data: (data || {}) as { code?: string; message?: string; requestId?: string; details?: string[] } };
+  if (event.event === "done") {
+    if (!isChatResponse(data)) throw new ChatSseProtocolError(event.event);
+    return { event: "done", data };
+  }
+  if (!isRecord(data)) throw new ChatSseProtocolError(event.event);
+  if (event.event === "error") return { event: "error", data: data as { code?: string; message?: string; requestId?: string; details?: string[] } };
   return null;
 }
 
-/** Parse Spring's named SSE events. Blank lines terminate an event. */
-export function parseSseText(text: string): SseEvent[] {
-  const events: SseEvent[] = [];
-  let eventName = "message";
-  let dataLines: string[] = [];
-  const flush = () => {
-    if (!dataLines.length) return;
-    const parsed = normalizeEvent(eventName, parseJson(dataLines.join("\n")));
-    if (parsed) events.push(parsed);
-    eventName = "message";
-    dataLines = [];
-  };
-  for (const line of text.replace(/\r\n/g, "\n").split("\n")) {
-    if (!line.trim()) { flush(); continue; }
-    if (line.startsWith(":")) continue;
-    const separator = line.indexOf(":");
-    const field = separator < 0 ? line : line.slice(0, separator);
-    const value = separator < 0 ? "" : line.slice(separator + 1).replace(/^ /, "");
-    if (field === "event") eventName = value;
-    if (field === "data") dataLines.push(value);
-  }
-  flush();
-  return events;
+/**
+ * Chat-specific normalization over the shared wire-level SSE parser.
+ * The parser itself lives in `client.ts`; this module must not fork it.
+ */
+export function parseSseText(text: string): ChatSseEvent[] {
+  return parseWireSseText(text)
+    .map(normalizeEvent)
+    .filter((event): event is ChatSseEvent => event !== null);
 }
 
-export async function* parseSseResponse(response: Response): AsyncGenerator<SseEvent> {
+export async function* parseSseResponse(
+  response: Response,
+  signal?: AbortSignal,
+): AsyncGenerator<ChatSseEvent> {
   if (!response.body) {
-    const text = await response.text();
-    yield* parseSseText(text);
+    yield* parseSseText(await response.text());
     return;
   }
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let eventName = "message";
-  let dataLines: string[] = [];
-  const flush = function* (): Generator<SseEvent> {
-    if (!dataLines.length) return;
-    const parsed = normalizeEvent(eventName, parseJson(dataLines.join("\n")));
-    if (parsed) yield parsed;
-    eventName = "message";
-    dataLines = [];
-  };
-  while (true) {
-    const chunk = await reader.read();
-    buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done });
-    const lines = buffer.replace(/\r\n/g, "\n").split("\n");
-    buffer = lines.pop() || "";
-    for (const line of lines) {
-      if (!line.trim()) { yield* flush(); continue; }
-      if (line.startsWith(":")) continue;
-      const separator = line.indexOf(":");
-      const field = separator < 0 ? line : line.slice(0, separator);
-      const value = separator < 0 ? "" : line.slice(separator + 1).replace(/^ /, "");
-      if (field === "event") eventName = value;
-      if (field === "data") dataLines.push(value);
+
+  const stream = response.body;
+  try {
+    for await (const event of parseSseStream(stream, { signal })) {
+      const normalized = normalizeEvent(event);
+      if (normalized) yield normalized;
     }
-    if (chunk.done) break;
+  } finally {
+    // The canonical parser releases its reader before this executes. Canceling
+    // here stops upstream work when a component abandons a partial response.
+    await stream.cancel().catch(() => undefined);
   }
-  if (buffer) {
-    const separator = buffer.indexOf(":");
-    const field = separator < 0 ? buffer : buffer.slice(0, separator);
-    const value = separator < 0 ? "" : buffer.slice(separator + 1).replace(/^ /, "");
-    if (field === "event") eventName = value;
-    if (field === "data") dataLines.push(value);
-  }
-  yield* flush();
 }

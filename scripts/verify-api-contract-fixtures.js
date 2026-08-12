@@ -16,6 +16,8 @@ const documentedOperations = extractDocumentedOperations(openapi);
 const documentedPaths = [
   "/chat",
   "/chat/stream",
+  "/code/runs",
+  "/code/run",
   "/ai/readiness",
   "/admin/capabilities",
   "/admin/users",
@@ -41,6 +43,17 @@ assert.match(openapi, /- name: Admin/m);
 assert.match(openapi, /- name: AI/m);
 assert.match(openapi, /  \/chat:\n    post:[\s\S]*?security: \[\{cookieAuth: \[\]\}, \{bearerAuth: \[\]\}\]/m);
 assert.match(openapi, /  \/chat\/stream:\n    post:[\s\S]*?sources, delta, done, and error[\s\S]*?text\/event-stream/m);
+assert.match(openapi, /  \/code\/run:\n    post:[\s\S]*?deprecated: true/m, "code/run must remain an explicit deprecated alias");
+assert.match(
+  openapi,
+  /Only `VERIFIED` knowledge chunks[\s\S]*?Merely `PUBLISHED`, legacy-unverified, draft, and excluded/m,
+  "knowledge retrieval must retain the verified source-chain gate"
+);
+assert.match(
+  openapi,
+  /ChatSource:\n[\s\S]*?required: \[[^\]]*evidenceHash[^\]]*\][\s\S]*?evidenceHash:/m,
+  "chat citations must retain a required evidence hash"
+);
 
 for (const endpoint of documentedPaths) {
   assert.match(
@@ -55,6 +68,7 @@ assert.equal(fixture.server, "/api/v1");
 assert.ok(Array.isArray(fixture.cases) && fixture.cases.length >= 5, "expected representative HTTP cases");
 
 const fixturePaths = new Set();
+const fixtureOperations = new Set();
 for (const example of fixture.cases) {
   assert.equal(typeof example.method, "string", "fixture method is required");
   assert.equal(typeof example.path, "string", "fixture path is required");
@@ -62,12 +76,20 @@ for (const example of fixture.cases) {
   const operation = `${example.method} ${example.path}`;
   assert.ok(documentedOperations.has(operation), `fixture operation is undocumented: ${operation}`);
   fixturePaths.add(example.path);
+  fixtureOperations.add(operation);
   assert.equal(typeof example.response, "object", "fixture response is required");
   assertNoSensitiveResponseData(example.response, example.path);
 }
 
 for (const endpoint of documentedPaths) {
   assert.ok(fixturePaths.has(endpoint), `fixture coverage is missing ${endpoint}`);
+}
+
+for (const operation of documentedOperations) {
+  const endpoint = operation.slice(operation.indexOf(" ") + 1);
+  if (documentedPaths.includes(endpoint)) {
+    assert.ok(fixtureOperations.has(operation), `fixture coverage is missing ${operation}`);
+  }
 }
 
 const auditFixture = requireFixtureCase("GET", "/admin/audit-events");

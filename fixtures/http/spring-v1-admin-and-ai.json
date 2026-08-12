@@ -552,6 +552,42 @@
           "createdAt": "2026-08-11T00:00:00Z"
         }
       ]
+    },
+    {
+      "name": "canonical code run path allows the guest sandbox boundary",
+      "method": "POST",
+      "path": "/code/runs",
+      "request": {
+        "language": "python",
+        "code": "print(1)",
+        "stdin": ""
+      },
+      "response": {
+        "language": "python",
+        "status": "success",
+        "stdout": "1\n",
+        "stderr": "",
+        "durationMs": 12,
+        "runId": null
+      }
+    },
+    {
+      "name": "singular code run path is a deprecated compatibility alias",
+      "method": "POST",
+      "path": "/code/run",
+      "request": {
+        "language": "c",
+        "code": "int main(void) { return 0; }",
+        "stdin": ""
+      },
+      "response": {
+        "language": "c",
+        "status": "success",
+        "stdout": "",
+        "stderr": "",
+        "durationMs": 12,
+        "runId": null
+      }
     }
   ]
 }

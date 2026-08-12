@@ -95,10 +95,11 @@ export interface ChatSource {
   source: string;
   pageLabel: string | null;
   score: number;
+  evidenceHash: string;
 }
 export interface ChatResponse {
   answer: string;
-  sessionId: string | null;
+  sessionId?: string | null;
   sources: ChatSource[];
   persisted: boolean;
 }
@@ -287,5 +288,5 @@ export interface BackgroundTask { id: number; taskType: string; status: "PENDING
 export type SseEvent =
   | { event: "sources"; data: { sources: ChatSource[] } | ChatSource[] }
   | { event: "delta"; data: { content?: string; delta?: string } }
-  | { event: "done"; data: { sessionId?: string | null; persisted?: boolean; answer?: string } }
+  | { event: "done"; data: ChatResponse }
   | { event: "error"; data: { code?: string; message?: string; requestId?: string; details?: string[] } };

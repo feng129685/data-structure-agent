@@ -39,6 +39,7 @@ pdfs/
 
 # === Local Build / Browser Artifacts ===
 # Rendered PPT output and browser traces are local evidence, not release inputs.
+frontend/dist/
 output/
 .playwright-cli/
 __pycache__/

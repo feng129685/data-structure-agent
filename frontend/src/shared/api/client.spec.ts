@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ApiClientError, createApiClient } from "./client";
+import { ApiClientError, createApiClient, parseSseStream } from "./client";
 
 describe("API 客户端公共边界", () => {
   it("携带 credentials 和 request id，并保留 Spring 错误字段", async () => {
@@ -49,5 +49,22 @@ describe("API 客户端公共边界", () => {
       kind: "binary",
       status: 200,
     });
+  });
+
+  it("cancels the reader when the stream abort signal fires", async () => {
+    let canceled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      cancel() {
+        canceled = true;
+      },
+    });
+    const controller = new AbortController();
+    const events = parseSseStream(stream, { signal: controller.signal });
+
+    const next = events.next();
+    controller.abort();
+
+    await expect(next).resolves.toEqual({ done: true, value: undefined });
+    expect(canceled).toBe(true);
   });
 });

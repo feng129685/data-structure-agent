@@ -1,6 +1,7 @@
 package com.feng.dsagent.review;
 
 import com.feng.dsagent.common.ApiException;
+import com.feng.dsagent.knowledge.KnowledgeEligibilityChanged;
 import com.feng.dsagent.security.AuthenticatedUser;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -8,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,12 +20,14 @@ class ReviewService {
     private static final Set<String> REVIEW_STATUSES = Set.of(
         "LEGACY_UNVERIFIED", "DRAFT", "PUBLISHED", "VERIFIED", "EXCLUDED"
     );
-    private static final Set<String> USABLE_SOURCE_STATUSES = Set.of("PUBLISHED", "VERIFIED");
+    private static final Set<String> VERIFIED_SOURCE_STATUSES = Set.of("VERIFIED");
 
     private final ReviewRepository repository;
+    private final ApplicationEventPublisher events;
 
-    ReviewService(ReviewRepository repository) {
+    ReviewService(ReviewRepository repository, ApplicationEventPublisher events) {
         this.repository = repository;
+        this.events = events;
     }
 
     ReviewPage<ReviewItemView> list(int page, int size, String requestedType, String requestedStatus, String search) {
@@ -73,7 +77,7 @@ class ReviewService {
             throw new ApiException(
                 HttpStatus.CONFLICT,
                 "ADMIN_REVIEW_SOURCE_INCOMPLETE",
-                "Verified review status requires a published, complete source chain"
+                "Verified review status requires a verified, complete source chain in a published chapter"
             );
         }
         if (before.status().equals(nextStatus)) {
@@ -96,6 +100,7 @@ class ReviewService {
         repository.appendAdminAudit(
             actor.userId(), type, contentId, "SUCCESS", safeRequestId(requestId), summary(before), summary(after)
         );
+        events.publishEvent(new KnowledgeEligibilityChanged());
         return view(after);
     }
 
@@ -151,7 +156,7 @@ class ReviewService {
             : repository.find(ReviewType.RESOURCE, item.parentId());
         resource.map(this::source).ifPresent(chain::add);
         boolean complete = chapterPublished
-            && resource.filter(value -> USABLE_SOURCE_STATUSES.contains(value.status()))
+            && resource.filter(value -> VERIFIED_SOURCE_STATUSES.contains(value.status()))
                 .map(this::sources)
                 .map(SourceAssessment::complete)
                 .orElse(false);
@@ -169,7 +174,7 @@ class ReviewService {
         resource.map(this::source).ifPresent(chain::add);
         List<ReviewSourceView> withMetadata = chainWithDeclaredSource(chain, item);
         boolean resourceComplete = resource.isEmpty() || resource
-            .filter(value -> USABLE_SOURCE_STATUSES.contains(value.status()))
+            .filter(value -> VERIFIED_SOURCE_STATUSES.contains(value.status()))
             .map(this::sources)
             .map(SourceAssessment::complete)
             .orElse(false);
@@ -191,7 +196,7 @@ class ReviewService {
         manifest.map(this::source).ifPresent(chain::add);
         boolean complete = chapterPublished
             && nonBlank(item.contentHash())
-            && manifest.filter(value -> USABLE_SOURCE_STATUSES.contains(value.status()))
+            && manifest.filter(value -> VERIFIED_SOURCE_STATUSES.contains(value.status()))
                 .map(this::sources)
                 .map(SourceAssessment::complete)
                 .orElse(false);
@@ -208,7 +213,7 @@ class ReviewService {
             : repository.findPresentationPageBySourceRef(item.sourceRef());
         page.map(this::source).ifPresent(chain::add);
         boolean complete = chapterPublished
-            && page.filter(value -> USABLE_SOURCE_STATUSES.contains(value.status()))
+            && page.filter(value -> VERIFIED_SOURCE_STATUSES.contains(value.status()))
                 .map(this::sources)
                 .map(SourceAssessment::complete)
                 .orElse(false);

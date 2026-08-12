@@ -112,8 +112,8 @@ public final class OpenAiCompatibleModelClient implements ModelClient {
         }
 
         if (!isSuccess(response.statusCode())) {
-            closeQuietly(response.body());
-            throw failure(MODEL_UPSTREAM_ERROR);
+            String responseBody = readResponseBody(response.body());
+            throw failure(MODEL_UPSTREAM_ERROR, reportedTotalTokens(responseBody));
         }
         readStream(response.body(), handler);
     }
@@ -163,6 +163,9 @@ public final class OpenAiCompatibleModelClient implements ModelClient {
             payload.put("max_tokens", request.maxTokens());
         }
         payload.put("stream", stream);
+        if (stream) {
+            payload.put("stream_options", Map.of("include_usage", true));
+        }
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (Exception error) {
@@ -196,7 +199,12 @@ public final class OpenAiCompatibleModelClient implements ModelClient {
                 if (data.isEmpty()) {
                     continue;
                 }
-                String content = streamContent(data);
+                JsonNode event = streamEvent(data);
+                Long totalTokens = reportedTotalTokens(event);
+                if (totalTokens != null) {
+                    handler.onUsage(totalTokens);
+                }
+                String content = streamContent(event);
                 if (content == null || content.isEmpty()) {
                     continue;
                 }
@@ -231,17 +239,21 @@ public final class OpenAiCompatibleModelClient implements ModelClient {
         }
     }
 
-    private String streamContent(String data) {
+    private JsonNode streamEvent(String data) {
         try {
-            JsonNode delta = objectMapper.readTree(data)
-                .path("choices")
-                .path(0)
-                .path("delta")
-                .path("content");
-            return delta.isMissingNode() || delta.isNull() ? null : delta.asText();
+            return objectMapper.readTree(data);
         } catch (Exception error) {
             throw failure(MODEL_STREAM_READ_FAILED);
         }
+    }
+
+    private String streamContent(JsonNode event) {
+        JsonNode delta = event
+            .path("choices")
+            .path(0)
+            .path("delta")
+            .path("content");
+        return delta.isMissingNode() || delta.isNull() ? null : delta.asText();
     }
 
     private URI endpoint() {

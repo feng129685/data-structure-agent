@@ -3,7 +3,7 @@
 - Freeze date: 2026-08-11
 - Contract base: `contracts/openapi-v1.yaml`
 - HTTP examples: `fixtures/http/spring-v1-admin-and-ai.json`
-- Contract verification: `node scripts/verify-api-contract-fixtures.js` passed with `cases=21 paths=20`
+- Contract verification: `node scripts/verify-api-contract-fixtures.js` passed with `cases=23 paths=22` (coverage is asserted per documented HTTP method and path)
 - Status: v1 behavior freeze for the currently implemented Spring surface. This is a contract baseline, not a declaration that every UI flow has been deployed to production.
 
 ## Scope
@@ -18,7 +18,7 @@ Node `/api/*` remains a compatibility surface, not a lower-version spelling of S
 |---|---|---|
 | User identity | `/auth/*`, `/users/me` | Spring JWT or `ds_session`; active database user and current database roles are authoritative. |
 | Chapters and course resources | `/chapters`, `/chapters/{chapterId}/resources`, `/resources/{resourceId}`, `/resources/{resourceId}/content` | Publication, audience, and license checks apply to list, metadata, and content access. |
-| Reviewed knowledge | `/knowledge/search` | Only published, audience-visible material is searchable; a search result is evidence metadata, not a generated conclusion. |
+| Reviewed knowledge | `/knowledge/search` | Only `VERIFIED` material with a complete `VERIFIED` source chain in a `PUBLISHED` chapter and the caller's audience scope is searchable; a search result is evidence metadata, not a generated conclusion. |
 | Chat and sessions | `/chat`, `/chat/stream`, `/chat/sessions*` | Formal generation is authenticated, evidence- and quota-gated, and owned history is isolated by user. |
 | Classroom, animation, code, and learning | `/classroom/*`, `/animations/*`, `/code/*`, `/learning/*` | Domain services own their state transitions and evidence; a client cannot create trusted evidence by posting a look-alike generic event. |
 | Administrator resources | `/admin/users*`, `/admin/audit-events`, `/admin/reviews*`, `/admin/background-tasks*`, `/admin/model-config*` | Database-backed `ADMIN` authorization, safe projections, and audited writes are mandatory. |
@@ -42,7 +42,7 @@ All administrator routes require the current database `ADMIN` role; a token clai
 | Capabilities | `GET /admin/capabilities` | Returns the current safe module map; it does not prove deployment health for every downstream integration. |
 | Users and roles | `GET /admin/users*`, `PATCH /admin/users/{id}/status`, `PATCH /admin/users/{id}/roles` | Safe user projections, self/last-admin safeguards, and audited mutations. |
 | Audit | `GET /admin/audit-events` | Paginated, filterable, non-sensitive summaries with request correlation. |
-| Review | `GET/PATCH /admin/reviews*` | Only the five frozen ReviewType values are accepted. PPT-backed DSVP may be verified through its published presentation source chain; classroom scripts, animation observations, and non-PPT DSVP are excluded. |
+| Review | `GET/PATCH /admin/reviews*` | Only the five frozen ReviewType values are accepted. A `VERIFIED` transition requires a complete `VERIFIED` presentation source chain and a `PUBLISHED` chapter; classroom scripts, animation observations, and non-PPT DSVP are excluded. |
 | Background tasks | `GET/POST /admin/background-tasks*` | The only current submitted, executable, retryable, and cancelable type is `STALE_TASK_RECOVERY`. |
 | Model configuration | `GET/PUT /admin/model-config`, `POST /admin/model-config/test` | Credential-free reads, encrypted writes, guarded provider probes, and non-sensitive audit summaries. |
 

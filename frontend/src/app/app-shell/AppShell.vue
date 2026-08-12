@@ -6,6 +6,8 @@ import { auth } from "../providers/runtime";
 const route = useRoute();
 const router = useRouter();
 const isAdmin = computed(() => route.meta.layout === "admin");
+// Transport failures keep the last verified user in the store; that is still a usable session.
+const hasRetainedSession = computed(() => Boolean(auth.state.user));
 const navItems = computed(() => isAdmin.value
   ? [{ to: "/admin", label: "总览" }, { to: "/admin/users", label: "用户" }, { to: "/admin/reviews", label: "审核" }, { to: "/admin/audit", label: "审计" }]
   : [{ to: "/user/chapters", label: "章节" }, { to: "/user/coach", label: "教练" }, { to: "/user/classroom", label: "课堂" }, { to: "/user/animation", label: "舞台" }]);
@@ -26,7 +28,7 @@ async function signOut() {
       <span class="app-header__spacer"></span>
       <div class="app-user">
         <span class="app-user__email">{{ auth.state.user?.email || "访客" }}</span>
-        <button v-if="auth.state.status === 'authenticated'" class="button button--small" type="button" @click="signOut">退出</button>
+        <button v-if="hasRetainedSession" class="button button--small" type="button" @click="signOut">退出</button>
         <RouterLink v-else class="button button--small" to="/login">登录</RouterLink>
       </div>
     </header>

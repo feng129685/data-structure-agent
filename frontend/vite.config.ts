@@ -3,40 +3,34 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { viteSingleFile } from "vite-plugin-singlefile";
+import { createBuildIntegrityPlugin, createDevelopmentServerConfig, createFrontendBuildConfig } from "./vite-routing";
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
-const sourceRoot = path.join(frontendRoot, "src");
 
-export default defineConfig(({ command, mode }) => {
-  const env = loadEnv(mode, frontendRoot, "");
-  const apiOrigin = env.VITE_DEV_API_ORIGIN || "http://127.0.0.1:8791";
+export function createViteConfig(command: string, env: Record<string, string | undefined>) {
+  const build = createFrontendBuildConfig(frontendRoot);
 
   return {
-    root: sourceRoot,
-    plugins: [vue(), ...(command === "build" ? [viteSingleFile()] : [])],
+    root: build.sourceRoot,
+    plugins: [
+      vue(),
+      ...(command === "build" ? [viteSingleFile(), createBuildIntegrityPlugin(frontendRoot, build.outDir)] : []),
+    ],
     resolve: {
       alias: {
-        "@": sourceRoot,
+        "@": build.sourceRoot,
       },
     },
-    server: {
-      host: "0.0.0.0",
-      port: Number(env.VITE_DEV_PORT || 5173),
-      proxy: {
-        "/api": { target: apiOrigin, changeOrigin: false },
-        "/healthz": { target: apiOrigin, changeOrigin: false },
-        "/presentation": { target: apiOrigin, changeOrigin: false },
-        "/pdfs": { target: apiOrigin, changeOrigin: false },
-        "/vendor": { target: apiOrigin, changeOrigin: false },
-      },
-    },
+    server: createDevelopmentServerConfig(env),
     build: {
-      outDir: frontendRoot,
-      emptyOutDir: false,
+      outDir: build.outDir,
+      emptyOutDir: build.emptyOutDir,
       assetsInlineLimit: 100_000_000,
       rollupOptions: {
-        input: path.join(sourceRoot, "index.html"),
+        input: path.join(build.sourceRoot, "index.html"),
       },
     },
   };
-});
+}
+
+export default defineConfig(({ command, mode }) => createViteConfig(command, loadEnv(mode, frontendRoot, "")));

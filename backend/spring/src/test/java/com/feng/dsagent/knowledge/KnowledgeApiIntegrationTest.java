@@ -51,9 +51,9 @@ class KnowledgeApiIntegrationTest {
         seedUser(STUDENT_ID, "knowledge-student@example.com", "STUDENT");
         seedUser(TEACHER_ID, "knowledge-teacher@example.com", "STUDENT", "TEACHER");
         seedUser(LIMIT_TEACHER_ID, "knowledge-limit@example.com", "STUDENT", "TEACHER");
-        insertResource("knowledge-api-public", "PUBLIC", "PUBLISHED");
-        insertResource("knowledge-api-classroom", "CLASSROOM_ONLY", "PUBLISHED");
-        insertResource("knowledge-api-team", "TEAM_ONLY", "PUBLISHED");
+        insertResource("knowledge-api-public", "PUBLIC", "VERIFIED");
+        insertResource("knowledge-api-classroom", "CLASSROOM_ONLY", "VERIFIED");
+        insertResource("knowledge-api-team", "TEAM_ONLY", "VERIFIED");
         insertResource("knowledge-api-draft", "PUBLIC", "DRAFT");
         insertChunk("knowledge-api-public", "knowledge-api-public", "public/hash.md");
         insertChunk("knowledge-api-classroom", "knowledge-api-classroom", "classroom/hash.md");
@@ -175,5 +175,6 @@ class KnowledgeApiIntegrationTest {
             id,
             sourcePath
         );
+        jdbc.update("UPDATE knowledge_chunks SET review_status = 'VERIFIED' WHERE id = ?", id);
     }
 }

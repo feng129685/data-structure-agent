@@ -27,10 +27,22 @@ public final class KnowledgeSearchService {
 
     private final AtomicReference<List<KnowledgeChunk>> chunks;
     private final double minimumScore;
+    private final EligibilityFilter eligibilityFilter;
 
     public KnowledgeSearchService(Collection<KnowledgeChunk> chunks, double minimumScore) {
+        this(chunks, minimumScore, (candidates, audience) -> candidates.stream()
+            .map(KnowledgeChunk::id)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet()));
+    }
+
+    KnowledgeSearchService(
+        Collection<KnowledgeChunk> chunks,
+        double minimumScore,
+        EligibilityFilter eligibilityFilter
+    ) {
         this.chunks = new AtomicReference<>(List.copyOf(chunks));
         this.minimumScore = minimumScore;
+        this.eligibilityFilter = eligibilityFilter;
     }
 
     public void replace(Collection<KnowledgeChunk> replacement) {
@@ -42,10 +54,12 @@ public final class KnowledgeSearchService {
      * This keeps readiness reporting aligned with {@link #search(String, String, int, KnowledgeAudience)}.
      */
     public EvidenceInventory inventory(String chapterId, KnowledgeAudience audience) {
+        List<KnowledgeChunk> snapshot = chunks.get();
+        Set<String> eligibleIds = eligibleIds(snapshot, audience);
         int chunkCount = 0;
         Set<String> sources = new LinkedHashSet<>();
-        for (KnowledgeChunk chunk : chunks.get()) {
-            if (!allows(chunk, chapterId, audience)) {
+        for (KnowledgeChunk chunk : snapshot) {
+            if (!eligibleIds.contains(chunk.id()) || !allows(chunk, chapterId, audience)) {
                 continue;
             }
             String sourceKey = chunk.source() == null ? chunk.id() : chunk.source();
@@ -70,9 +84,11 @@ public final class KnowledgeSearchService {
             return List.of();
         }
 
+        List<KnowledgeChunk> snapshot = chunks.get();
+        Set<String> eligibleIds = eligibleIds(snapshot, audience);
         Map<String, KnowledgeSearchResult> uniqueBySource = new LinkedHashMap<>();
-        for (KnowledgeChunk chunk : chunks.get()) {
-            if (!allows(chunk, chapterId, audience)) {
+        for (KnowledgeChunk chunk : snapshot) {
+            if (!eligibleIds.contains(chunk.id()) || !allows(chunk, chapterId, audience)) {
                 continue;
             }
             double score = score(chunk, queryTokens);
@@ -94,6 +110,13 @@ public final class KnowledgeSearchService {
         return audience != null
             && audience.allows(chunk.licenseScope())
             && (chapterId == null || chapterId.isBlank() || chapterId.equals(chunk.chapterId()));
+    }
+
+    private Set<String> eligibleIds(Collection<KnowledgeChunk> snapshot, KnowledgeAudience audience) {
+        if (audience == null || snapshot.isEmpty()) {
+            return Set.of();
+        }
+        return eligibilityFilter.eligibleIds(snapshot, audience);
     }
 
     private double score(KnowledgeChunk chunk, Set<String> queryTokens) {
@@ -161,5 +184,10 @@ public final class KnowledgeSearchService {
     }
 
     public record EvidenceInventory(int knowledgeChunkCount, int sourceCount) {
+    }
+
+    @FunctionalInterface
+    interface EligibilityFilter {
+        Set<String> eligibleIds(Collection<KnowledgeChunk> candidates, KnowledgeAudience audience);
     }
 }

@@ -6,6 +6,19 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts=false \
     && npm cache clean --force
 
+FROM ${NODE_BASE_IMAGE} AS frontend-build
+
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --ignore-scripts=false \
+    && npm cache clean --force
+COPY frontend/src ./src
+COPY frontend/tsconfig.json frontend/vite.config.ts frontend/vite-routing.ts frontend/vitest.config.ts ./
+COPY frontend/prototype.html ./prototype.html
+RUN npm test \
+    && npm run typecheck \
+    && npm run build
+
 FROM ${NODE_BASE_IMAGE}
 
 ENV NODE_ENV=production
@@ -14,7 +27,8 @@ WORKDIR /app
 COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node package.json package-lock.json ./
 COPY --chown=node:node backend/node ./backend/node
-COPY --chown=node:node frontend ./frontend
+COPY --from=frontend-build --chown=node:node /app/frontend/dist ./frontend
+COPY --chown=node:node frontend/prototype.html ./frontend/prototype.html
 COPY --chown=node:node deployment/node-entrypoint.sh /usr/local/bin/node-entrypoint
 RUN mkdir -p /app/default-pdfs /app/pdfs /app/data \
     && chmod 755 /usr/local/bin/node-entrypoint /app/default-pdfs \

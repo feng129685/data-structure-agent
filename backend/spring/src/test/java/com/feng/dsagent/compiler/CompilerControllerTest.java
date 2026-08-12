@@ -61,6 +61,22 @@ class CompilerControllerTest {
     }
 
     @Test
+    void keepsTheSingularPathAsAnExplicitCompatibilityAlias() throws Exception {
+        mockMvc.perform(post("/api/v1/code/run")
+                .with(request -> {
+                    request.setRemoteAddr("192.0.2.11");
+                    return request;
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"language":"c","code":"main(){}","stdin":""}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.language").value("c"))
+            .andExpect(jsonPath("$.stdout").value("c-ok"));
+    }
+
+    @Test
     void returnsTheUnifiedApiErrorForOversizedCode() throws Exception {
         mockMvc.perform(post("/api/v1/code/runs")
                 .contentType(MediaType.APPLICATION_JSON)

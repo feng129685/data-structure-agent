@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,7 +16,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.feng.dsagent.knowledge.KnowledgeChunk;
+import com.feng.dsagent.knowledge.KnowledgeEligibilityChanged;
+import com.feng.dsagent.knowledge.KnowledgeIndexRefreshService;
 import com.feng.dsagent.knowledge.KnowledgeSearchService;
 import com.feng.dsagent.model.ModelClient;
 import com.feng.dsagent.model.ModelClientException;
@@ -70,6 +72,9 @@ class AiQuotaExecutionApiIntegrationTest {
     @Autowired
     private KnowledgeSearchService knowledge;
 
+    @Autowired
+    private KnowledgeIndexRefreshService knowledgeIndex;
+
     @MockitoBean(name = "persistedModelConfigClient")
     private ModelClient model;
 
@@ -82,23 +87,30 @@ class AiQuotaExecutionApiIntegrationTest {
         jdbc.update("DELETE FROM ai_quota_buckets");
         jdbc.update("DELETE FROM ai_quota_user_concurrency");
         jdbc.update("DELETE FROM model_configurations");
+        jdbc.update("DELETE FROM knowledge_chunks WHERE id = ?", "quota-api-stack");
         jdbc.update("DELETE FROM user_roles WHERE user_id = ?", USER_ID);
         jdbc.update("DELETE FROM users WHERE id = ?", USER_ID);
         jdbc.update("INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)", USER_ID, "quota-api@example.com", "hash");
-        knowledge.replace(List.of(new KnowledgeChunk(
+        jdbc.update(
+            """
+                INSERT INTO knowledge_chunks (
+                    id, chapter_id, title, content, source_path, page_label, review_status, license_scope
+                ) VALUES (?, ?, ?, ?, ?, ?, 'VERIFIED', 'PUBLIC')
+                """,
             "quota-api-stack",
             "03-stack-queue",
             "Stack definition",
             "A stack is a last-in, first-out linear structure. Push and pop operate at the stack top.",
             "fixtures/knowledge/stack.md",
-            "page 52",
-            "PUBLIC"
-        )));
+            "page 52"
+        );
+        knowledgeIndex.refreshAfterEligibilityChange(new KnowledgeEligibilityChanged());
     }
 
     @AfterEach
     void resetKnowledge() {
         knowledge.replace(List.of());
+        jdbc.update("DELETE FROM knowledge_chunks WHERE id = ?", "quota-api-stack");
     }
 
     @Test
@@ -236,6 +248,54 @@ class AiQuotaExecutionApiIntegrationTest {
     }
 
     @Test
+    void streamingSettlesProviderReportedUsageInsteadOfTheReservationEstimate() throws Exception {
+        doAnswer(invocation -> {
+            ModelStreamHandler handler = invocation.getArgument(1, ModelStreamHandler.class);
+            handler.onContent("Stack ");
+            handler.onContent("answers");
+            handler.onUsage(5_000L);
+            return null;
+        }).when(model).stream(any(), any());
+
+        MvcResult stream = mockMvc.perform(post("/api/v1/chat/stream")
+                .header("Authorization", bearer())
+                .header("X-Request-ID", "quota-chat-stream-provider-usage")
+                .accept(MediaType.TEXT_EVENT_STREAM)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"prompt":"stack","chapterId":"03-stack-queue","history":[]}
+                    """))
+            .andExpect(request().asyncStarted())
+            .andReturn();
+
+        mockMvc.perform(asyncDispatch(stream))
+            .andExpect(status().isOk());
+
+        assertThat(jdbc.queryForObject(
+            "SELECT actual_tokens FROM ai_quota_reservations WHERE status = 'SETTLED'",
+            Long.class
+        )).isEqualTo(5_000L);
+        assertThat(jdbc.queryForObject(
+            "SELECT estimated_tokens FROM ai_quota_reservations WHERE status = 'SETTLED'",
+            Long.class
+        )).isLessThan(5_000L);
+        assertThat(jdbc.queryForObject(
+            "SELECT usage_source FROM ai_quota_reservations WHERE status = 'SETTLED'",
+            String.class
+        )).isEqualTo("PROVIDER_REPORTED");
+        assertThat(jdbc.queryForObject(
+            "SELECT reserved_tokens FROM ai_quota_buckets WHERE user_id = ?",
+            Long.class,
+            USER_ID
+        )).isZero();
+        assertThat(jdbc.queryForObject(
+            "SELECT active_reservations FROM ai_quota_user_concurrency WHERE user_id = ?",
+            Integer.class,
+            USER_ID
+        )).isZero();
+    }
+
+    @Test
     void upstreamStreamingFailureEmitsControlledErrorAndReleasesTheReservation() throws Exception {
         doAnswer(invocation -> {
             ModelStreamHandler handler = invocation.getArgument(1, ModelStreamHandler.class);
@@ -281,6 +341,79 @@ class AiQuotaExecutionApiIntegrationTest {
     }
 
     @Test
+    void providerUsageReportedBeforeStreamingFailureSettlesActualUsage() {
+        doAnswer(invocation -> {
+            ModelStreamHandler handler = invocation.getArgument(1, ModelStreamHandler.class);
+            handler.onContent("partial answer");
+            handler.onUsage(13L);
+            throw new ModelClientException(ModelErrorCode.MODEL_STREAM_IDLE_TIMEOUT);
+        }).when(model).stream(any(), any());
+
+        assertThatThrownBy(() -> execution.stream(
+            USER_ID,
+            "chat",
+            "quota-chat-stream-provider-failure-usage",
+            new ModelRequest(List.of(new ModelMessage("user", "stack")), 0.2, 32),
+            content -> { }
+        )).isInstanceOfSatisfying(ModelClientException.class, error ->
+            assertThat(error.code()).isEqualTo("MODEL_STREAM_IDLE_TIMEOUT")
+        );
+
+        assertThat(jdbc.queryForObject(
+            "SELECT actual_tokens FROM ai_quota_reservations WHERE status = 'FAILED'",
+            Long.class
+        )).isEqualTo(13L);
+        assertThat(jdbc.queryForObject(
+            "SELECT usage_source FROM ai_quota_reservations WHERE status = 'FAILED'",
+            String.class
+        )).isEqualTo("PROVIDER_REPORTED");
+        assertThat(jdbc.queryForObject(
+            "SELECT reserved_tokens FROM ai_quota_buckets WHERE user_id = ?",
+            Long.class,
+            USER_ID
+        )).isZero();
+        assertThat(jdbc.queryForObject(
+            "SELECT active_reservations FROM ai_quota_user_concurrency WHERE user_id = ?",
+            Integer.class,
+            USER_ID
+        )).isZero();
+    }
+
+    @Test
+    void providerReportedUsageOnStreamingFailureSettlesActualUsage() {
+        doThrow(new ModelClientException(ModelErrorCode.MODEL_UPSTREAM_ERROR, 23L)).when(model).stream(any(), any());
+
+        assertThatThrownBy(() -> execution.stream(
+            USER_ID,
+            "chat",
+            "quota-chat-stream-upstream-error-usage",
+            new ModelRequest(List.of(new ModelMessage("user", "stack")), 0.2, 32),
+            content -> { }
+        )).isInstanceOfSatisfying(ModelClientException.class, error ->
+            assertThat(error.code()).isEqualTo("MODEL_UPSTREAM_ERROR")
+        );
+
+        assertThat(jdbc.queryForObject(
+            "SELECT actual_tokens FROM ai_quota_reservations WHERE status = 'FAILED'",
+            Long.class
+        )).isEqualTo(23L);
+        assertThat(jdbc.queryForObject(
+            "SELECT usage_source FROM ai_quota_reservations WHERE status = 'FAILED'",
+            String.class
+        )).isEqualTo("PROVIDER_REPORTED");
+        assertThat(jdbc.queryForObject(
+            "SELECT reserved_tokens FROM ai_quota_buckets WHERE user_id = ?",
+            Long.class,
+            USER_ID
+        )).isZero();
+        assertThat(jdbc.queryForObject(
+            "SELECT active_reservations FROM ai_quota_user_concurrency WHERE user_id = ?",
+            Integer.class,
+            USER_ID
+        )).isZero();
+    }
+
+    @Test
     void clientDisconnectedDuringStreamingReleasesTheReservationWithAnAuditableReason() {
         doAnswer(invocation -> {
             ModelStreamHandler handler = invocation.getArgument(1, ModelStreamHandler.class);
@@ -308,6 +441,51 @@ class AiQuotaExecutionApiIntegrationTest {
             "SELECT usage_source FROM ai_quota_reservations",
             String.class
         )).isEqualTo("RESERVATION_ESTIMATE");
+        assertThat(jdbc.queryForObject(
+            "SELECT reserved_tokens FROM ai_quota_buckets WHERE user_id = ?",
+            Long.class,
+            USER_ID
+        )).isZero();
+        assertThat(jdbc.queryForObject(
+            "SELECT active_reservations FROM ai_quota_user_concurrency WHERE user_id = ?",
+            Integer.class,
+            USER_ID
+        )).isZero();
+    }
+
+    @Test
+    void clientDisconnectAfterProviderUsageSettlesActualUsage() {
+        doAnswer(invocation -> {
+            ModelStreamHandler handler = invocation.getArgument(1, ModelStreamHandler.class);
+            handler.onUsage(17L);
+            handler.onContent("partial answer");
+            return null;
+        }).when(model).stream(any(), any());
+
+        assertThatThrownBy(() -> execution.stream(
+            USER_ID,
+            "chat",
+            "quota-chat-stream-disconnected-provider-usage",
+            new ModelRequest(List.of(new ModelMessage("user", "stack")), 0.2, 32),
+            content -> { throw new AiStreamAbortedException(new IllegalStateException("closed")); }
+        )).isInstanceOf(AiStreamAbortedException.class);
+
+        assertThat(jdbc.queryForObject(
+            "SELECT status FROM ai_quota_reservations",
+            String.class
+        )).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject(
+            "SELECT failure_code FROM ai_quota_reservations",
+            String.class
+        )).isEqualTo("AI_STREAM_CLIENT_DISCONNECTED");
+        assertThat(jdbc.queryForObject(
+            "SELECT actual_tokens FROM ai_quota_reservations",
+            Long.class
+        )).isEqualTo(17L);
+        assertThat(jdbc.queryForObject(
+            "SELECT usage_source FROM ai_quota_reservations",
+            String.class
+        )).isEqualTo("PROVIDER_REPORTED");
         assertThat(jdbc.queryForObject(
             "SELECT reserved_tokens FROM ai_quota_buckets WHERE user_id = ?",
             Long.class,

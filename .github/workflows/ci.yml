@@ -19,6 +19,36 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: node scripts/verify-api-contract-fixtures.js
+      - run: node scripts/verify-backend-layout.js
+      - run: node scripts/verify-frontend-layout.js
+      - run: node scripts/verify-core-regression.js
+      - run: git diff --check
+
+  frontend:
+    name: Frontend tests, types, and production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Run Vitest
+        working-directory: frontend
+        run: npm test
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Build production frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Verify production artifact integrity
+        run: node scripts/verify-frontend-build-artifact.js
 
   spring-backend:
     name: Spring backend tests and package
@@ -39,3 +69,12 @@ jobs:
       - name: Package application
         working-directory: backend/spring
         run: ./mvnw -B -DskipTests package
+
+  node-image:
+    name: Node image build gate
+    needs: [frontend, prototype]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Node compatibility image
+        run: docker build --file deployment/Dockerfile.node --tag ds-agent-node:ci .

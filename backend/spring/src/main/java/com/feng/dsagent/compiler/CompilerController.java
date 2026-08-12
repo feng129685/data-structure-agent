@@ -43,7 +43,7 @@ public final class CompilerController {
         this(compiler, clock, new CompilerConcurrencyLimiter(4, 1));
     }
 
-    @PostMapping({"/runs", "/run"})
+    @PostMapping("/runs")
     public RunCodeResponse run(
         @RequestBody RunCodeRequest request,
         HttpServletRequest servletRequest,
@@ -62,6 +62,20 @@ public final class CompilerController {
         try (CompilerConcurrencyLimiter.Permit ignored = concurrencyLimiter.acquire(clientKey(authentication, servletRequest))) {
             return compiler.run(request, userId);
         }
+    }
+
+    /**
+     * Compatibility route retained for existing clients. New callers must use
+     * the plural, documented `/runs` resource path.
+     */
+    @Deprecated(since = "1.0", forRemoval = false)
+    @PostMapping("/run")
+    public RunCodeResponse runDeprecated(
+        @RequestBody RunCodeRequest request,
+        HttpServletRequest servletRequest,
+        Authentication authentication
+    ) {
+        return run(request, servletRequest, authentication);
     }
 
     private static String clientKey(Authentication authentication, HttpServletRequest request) {

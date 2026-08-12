@@ -20,10 +20,10 @@ class KnowledgeAuthorizationIntegrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void linkedResourceLicenseControlsSearchVisibilityAndDraftResourcesStayOutOfTheIndex() {
-        insertResource("knowledge-auth-public", "PUBLIC", "PUBLISHED");
-        insertResource("knowledge-auth-classroom", "CLASSROOM_ONLY", "PUBLISHED");
-        insertResource("knowledge-auth-team", "TEAM_ONLY", "PUBLISHED");
+    void verifiedLinkedResourceLicenseControlsSearchVisibilityAndDraftResourcesStayOutOfTheIndex() {
+        insertResource("knowledge-auth-public", "PUBLIC", "VERIFIED");
+        insertResource("knowledge-auth-classroom", "CLASSROOM_ONLY", "VERIFIED");
+        insertResource("knowledge-auth-team", "TEAM_ONLY", "VERIFIED");
         insertResource("knowledge-auth-draft", "PUBLIC", "DRAFT");
 
         insertChunk("knowledge-auth-public", "knowledge-auth-public", "public/hash.md");
@@ -77,7 +77,7 @@ class KnowledgeAuthorizationIntegrationTest {
     }
 
     private void insertChunk(String id, String resourceId, String sourcePath) {
-        insertChunk(id, resourceId, sourcePath, "PUBLISHED");
+        insertChunk(id, resourceId, sourcePath, "VERIFIED");
     }
 
     private void insertChunk(String id, String resourceId, String sourcePath, String reviewStatus) {

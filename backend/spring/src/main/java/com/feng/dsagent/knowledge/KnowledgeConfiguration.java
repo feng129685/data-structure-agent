@@ -30,10 +30,21 @@ public class KnowledgeConfiguration {
     }
 
     @Bean
-    KnowledgeSearchService knowledgeSearchService(KnowledgeCorpus corpus, KnowledgeProperties properties) {
+    KnowledgeSearchService knowledgeSearchService(
+        KnowledgeCorpus corpus,
+        KnowledgeProperties properties,
+        KnowledgeChunkRepository repository
+    ) {
         List<KnowledgeChunk> initialChunks = properties.enabled() && properties.autoPublishLocal()
             ? corpus.chunks()
             : List.of();
-        return new KnowledgeSearchService(initialChunks, properties.minimumScore());
+        return new KnowledgeSearchService(
+            initialChunks,
+            properties.minimumScore(),
+            (candidates, audience) -> repository.findEligibleIds(
+                candidates.stream().map(KnowledgeChunk::id).toList(),
+                audience
+            )
+        );
     }
 }

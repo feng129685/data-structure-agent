@@ -151,7 +151,23 @@ class ReviewQueueApiIntegrationTest {
     }
 
     @Test
-    void pptBackedDsvpSnapshotCanBeVerifiedThroughPublishedPresentationSourceChain() throws Exception {
+    void publishedButUnverifiedParentCannotAuthorizeChildEvidence() throws Exception {
+        long adminId = seedUser("review-parent-status-admin@example.com", "STUDENT", "TEACHER", "ADMIN");
+        String adminToken = bearer(adminId, "STUDENT", "TEACHER", "ADMIN");
+        String chapterId = publishedChapterId();
+        seedResource("admin-review-published-parent", chapterId, "PUBLISHED", "Course source", "2026.1");
+        seedKnowledge("admin-review-published-child", chapterId, "admin-review-published-parent", "DRAFT");
+
+        mockMvc.perform(patch("/api/v1/admin/reviews/KNOWLEDGE_CHUNK/admin-review-published-child/status")
+                .header("Authorization", adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"VERIFIED\",\"note\":\"Parent still needs verification\"}"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("ADMIN_REVIEW_SOURCE_INCOMPLETE"));
+    }
+
+    @Test
+    void pptBackedDsvpSnapshotCanBeVerifiedThroughVerifiedPresentationSourceChain() throws Exception {
         long adminId = seedUser("review-dsvp-admin@example.com", "STUDENT", "TEACHER", "ADMIN");
         String adminToken = bearer(adminId, "STUDENT", "TEACHER", "ADMIN");
         String chapterId = publishedChapterId();
@@ -161,9 +177,9 @@ class ReviewQueueApiIntegrationTest {
         String sourceRef = "ppt/admin-review-dsvp/page-1";
         String snapshotId = "admin-review-dsvp-snapshot";
 
-        seedResource(resourceId, chapterId, "PUBLISHED", "Review PPT source", "2026.1");
-        seedPresentationManifest(manifestId, chapterId, resourceId, "PUBLISHED");
-        seedPresentationPage(pageId, manifestId, sourceRef, "PUBLISHED");
+        seedResource(resourceId, chapterId, "VERIFIED", "Review PPT source", "2026.1");
+        seedPresentationManifest(manifestId, chapterId, resourceId, "VERIFIED");
+        seedPresentationPage(pageId, manifestId, sourceRef, "VERIFIED");
         seedDsvpSnapshot(snapshotId, sourceRef);
 
         mockMvc.perform(patch("/api/v1/admin/reviews/DSVP_REQUEST_SNAPSHOT/" + snapshotId + "/status")
@@ -185,7 +201,7 @@ class ReviewQueueApiIntegrationTest {
             .andExpect(jsonPath("$.sourceChain[0].status").value("PUBLISHED"))
             .andExpect(jsonPath("$.sourceChain[1].type").value("PRESENTATION_PAGE"))
             .andExpect(jsonPath("$.sourceChain[1].id").value(pageId))
-            .andExpect(jsonPath("$.sourceChain[1].status").value("PUBLISHED"));
+            .andExpect(jsonPath("$.sourceChain[1].status").value("VERIFIED"));
     }
 
     @Test

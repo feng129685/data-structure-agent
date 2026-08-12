@@ -56,15 +56,14 @@ public class KnowledgeEvidenceReadinessService {
                 LEFT JOIN chapters rc ON rc.id = r.chapter_id
                 WHERE (? IS NULL OR k.chapter_id = ?)
                   AND NOT (
-                    k.review_status IN ('PUBLISHED', 'VERIFIED')
-                    AND (k.chapter_id IS NULL OR kc.status = 'PUBLISHED')
-                    AND (k.resource_id IS NULL OR (
-                        r.review_status IN ('PUBLISHED', 'VERIFIED')
-                        AND rc.status = 'PUBLISHED'
-                    ))
-                    AND k.license_scope IN (%s)
+                    %s
+                    AND %s IN (%s)
                 )
-                """.formatted(licenseClause);
+                """.formatted(
+                    KnowledgeEligibilitySql.REVIEWED_SOURCE_CHAIN,
+                    KnowledgeEligibilitySql.EFFECTIVE_LICENSE_SCOPE,
+                    licenseClause
+                );
         Integer count = jdbc.queryForObject(
             sql,
             Integer.class,

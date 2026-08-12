@@ -4,10 +4,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.feng.dsagent.knowledge.KnowledgeChunk;
+import com.feng.dsagent.knowledge.KnowledgeEligibilityChanged;
+import com.feng.dsagent.knowledge.KnowledgeIndexRefreshService;
 import com.feng.dsagent.knowledge.KnowledgeSearchService;
 import com.feng.dsagent.security.JwtTokenService;
-import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,10 +36,14 @@ class AiReadinessApiIntegrationTest {
     @Autowired
     private KnowledgeSearchService knowledge;
 
+    @Autowired
+    private KnowledgeIndexRefreshService knowledgeIndex;
+
     @BeforeEach
     void prepareData() {
         jdbc.update("DELETE FROM model_configurations");
-        jdbc.update("DELETE FROM knowledge_chunks WHERE id = ?", "readiness-draft");
+        jdbc.update("DELETE FROM knowledge_chunks WHERE id IN (?, ?)", "readiness-draft", "readiness-stack");
+        jdbc.update("DELETE FROM resources WHERE id = ?", "readiness-stack-source");
         jdbc.update("DELETE FROM user_roles WHERE user_id = ?", USER_ID);
         jdbc.update("DELETE FROM users WHERE id = ?", USER_ID);
         jdbc.update(
@@ -62,22 +66,40 @@ class AiReadinessApiIntegrationTest {
             "DRAFT",
             "CLASSROOM_ONLY"
         );
-        knowledge.replace(List.of(new KnowledgeChunk(
+        jdbc.update(
+            """
+                INSERT INTO resources (
+                    id, chapter_id, resource_type, title, source_name, version_label, review_status, license_scope
+                ) VALUES (?, ?, 'MARKDOWN', ?, ?, ?, 'VERIFIED', 'CLASSROOM_ONLY')
+                """,
+            "readiness-stack-source",
+            "03-stack-queue",
+            "栈的定义来源",
+            "课程组",
+            "2026.1"
+        );
+        jdbc.update(
+            """
+                INSERT INTO knowledge_chunks
+                    (id, chapter_id, resource_id, title, content, source_path, review_status, license_scope)
+                VALUES (?, ?, ?, ?, ?, ?, 'VERIFIED', 'CLASSROOM_ONLY')
+                """,
             "readiness-stack",
             "03-stack-queue",
+            "readiness-stack-source",
             "栈的定义",
             "栈是后进先出的线性结构，入栈和出栈都在栈顶进行。",
-            "fixtures/knowledge/stack.md",
-            "第 52 页",
-            "CLASSROOM_ONLY"
-        )));
+            "fixtures/knowledge/stack.md"
+        );
+        knowledgeIndex.refreshAfterEligibilityChange(new KnowledgeEligibilityChanged());
     }
 
     @AfterEach
     void resetKnowledge() {
-        knowledge.replace(List.of());
         jdbc.update("DELETE FROM model_configurations");
-        jdbc.update("DELETE FROM knowledge_chunks WHERE id = ?", "readiness-draft");
+        jdbc.update("DELETE FROM knowledge_chunks WHERE id IN (?, ?)", "readiness-draft", "readiness-stack");
+        jdbc.update("DELETE FROM resources WHERE id = ?", "readiness-stack-source");
+        knowledge.replace(java.util.List.of());
     }
 
     @Test
@@ -117,6 +139,28 @@ class AiReadinessApiIntegrationTest {
             .andExpect(jsonPath("$.evidenceAvailable").value(false))
             .andExpect(jsonPath("$.evidenceReason").value("QUESTION_EVIDENCE_UNAVAILABLE"))
             .andExpect(jsonPath("$.allowFormalGeneration").value(false));
+    }
+
+    @Test
+    void rejectsBlankOptionalParametersWithTheUnifiedValidationEnvelope() throws Exception {
+        mockMvc.perform(get("/api/v1/ai/readiness")
+                .param("chapterId", "   ")
+                .header("Authorization", "Bearer " + token()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+            .andExpect(jsonPath("$.requestId").isNotEmpty())
+            .andExpect(jsonPath("$.details[0]").value(org.hamcrest.Matchers.containsString("chapterId")));
+    }
+
+    @Test
+    void convertsMethodValidationFailuresToTheUnifiedValidationEnvelope() throws Exception {
+        mockMvc.perform(get("/api/v1/ai/readiness")
+                .param("prompt", "x".repeat(4_001))
+                .header("Authorization", "Bearer " + token()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+            .andExpect(jsonPath("$.requestId").isNotEmpty())
+            .andExpect(jsonPath("$.details").isNotEmpty());
     }
 
     @Test

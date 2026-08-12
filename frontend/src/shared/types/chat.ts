@@ -22,6 +22,7 @@ export interface ChatSource {
   source: string;
   pageLabel: string | null;
   score: number;
+  evidenceHash: string;
 }
 
 export interface ChatResponse {
