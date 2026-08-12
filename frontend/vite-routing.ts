@@ -2,6 +2,9 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+// Keep separately copied runtime assets inside the build-integrity scope.
+const FRONTEND_RUNTIME_ASSETS = ["prototype.html"] as const;
+
 export interface DevelopmentServerConfig {
   host: string;
   port: number;
@@ -66,7 +69,7 @@ function frontendSourceHash(frontendRoot: string): string {
     "vite.config.ts",
     "vite-routing.ts",
     "vitest.config.ts",
-    "prototype.html",
+    ...FRONTEND_RUNTIME_ASSETS,
   ].sort();
   const hash = createHash("sha256");
   for (const relativePath of sourceFiles) {

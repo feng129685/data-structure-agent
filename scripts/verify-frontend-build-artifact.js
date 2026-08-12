@@ -10,6 +10,8 @@ const frontendRoot = path.join(root, "frontend");
 const outputRoot = path.join(frontendRoot, "dist");
 const manifestPath = path.join(outputRoot, "build-integrity.json");
 const indexPath = path.join(outputRoot, "index.html");
+// Keep this list synchronized with separately copied runtime assets in Dockerfile.node.
+const frontendRuntimeAssets = ["prototype.html"];
 
 assert.ok(fs.existsSync(indexPath), "frontend/dist/index.html is required after a production build");
 assert.ok(fs.existsSync(manifestPath), "frontend/dist/build-integrity.json is required after a production build");
@@ -39,7 +41,7 @@ function sourceHash(frontendDirectory) {
     "vite.config.ts",
     "vite-routing.ts",
     "vitest.config.ts",
-    "prototype.html",
+    ...frontendRuntimeAssets,
   ].map((file) => path.isAbsolute(file) ? path.relative(frontendDirectory, file) : file)
     .sort();
   const hash = crypto.createHash("sha256");
