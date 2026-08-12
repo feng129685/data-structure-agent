@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createRouteGuard } from "./guards";
+import { adminRoutes } from "../admin/routes";
+
+function adminSettingsMeta() {
+  const route = adminRoutes.find((item) => item.name === "admin-settings");
+  if (!route) throw new Error("admin settings route is missing");
+  return route.meta ?? {};
+}
 
 describe("路由守卫公共边界", () => {
   it("未登录访问受保护路由时保留回跳地址", async () => {
@@ -88,6 +95,32 @@ describe("路由守卫公共边界", () => {
       } as never,
     });
 
-    await expect(guard({ path: "/admin/settings", fullPath: "/admin/settings", meta: { requiresAuth: true, roles: ["ADMIN"], requiresCapability: "modelSettings" } } as never)).resolves.toBe(true);
+    await expect(guard({ path: "/admin/settings", fullPath: "/admin/settings", meta: adminSettingsMeta() } as never)).resolves.toBe(true);
+  });
+
+  it.each([
+    ["NOT_CONFIGURED", { available: false, status: "NOT_CONFIGURED", reason: "NOT_CONFIGURED" }],
+    ["disabled configuration", { available: false, status: "UNAVAILABLE", reason: "PERSISTED_CONFIGURATION_DISABLED" }],
+    ["zero quota", { available: false, status: "UNAVAILABLE", reason: "PERSISTED_QUOTA_NOT_CONFIGURED" }],
+    ["model service unavailable", { available: false, status: "UNAVAILABLE", reason: "MODEL_CONFIG_UNAVAILABLE" }],
+  ])("allows an ADMIN into settings when model settings are %s", async (_state, modelSettings) => {
+    const guard = createRouteGuard({
+      auth: {
+        state: {
+          status: "authenticated",
+          user: { id: 1, email: "admin@example.com", roles: ["ADMIN"] },
+          capabilities: {
+            userId: 1,
+            roles: ["ADMIN"],
+            modules: { modelSettings },
+            service: { name: "spring", version: "test", status: "AVAILABLE" },
+          },
+          error: null,
+        },
+        restoreSession: async () => undefined,
+      } as never,
+    });
+
+    await expect(guard({ path: "/admin/settings", fullPath: "/admin/settings", meta: adminSettingsMeta() } as never)).resolves.toBe(true);
   });
 });
