@@ -64,6 +64,7 @@ app:
     mail-from: ${SMTP_FROM:no-reply@example.com}
   bootstrap-admin:
     enabled: ${BOOTSTRAP_ADMIN_PROVISION_ENABLED:false}
+    reconcile-existing: ${BOOTSTRAP_ADMIN_PROVISION_RECONCILE_EXISTING:false}
     email: ${BOOTSTRAP_ADMIN_PROVISION_EMAIL:}
     username: ${BOOTSTRAP_ADMIN_PROVISION_USERNAME:}
     password: ${BOOTSTRAP_ADMIN_PROVISION_PASSWORD:}

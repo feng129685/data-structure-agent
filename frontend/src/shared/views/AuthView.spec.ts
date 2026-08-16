@@ -114,4 +114,19 @@ describe("verification-code auth flow", () => {
 
     expect(authMock.login).toHaveBeenCalledWith({ username: "ACha_", password: "correct-horse-battery-staple" });
   });
+
+  it("uses the management entry shell when login redirects into the admin console", async () => {
+    const router = createTestRouter();
+    await router.push("/login?redirect=/admin/mail");
+    await router.isReady();
+    const wrapper = mount(AuthView, { props: { mode: "login" }, global: { plugins: [router] } });
+
+    expect(wrapper.classes()).toContain("auth-screen--admin");
+  });
+
+  it("keeps the public login outside the management entry shell", async () => {
+    const wrapper = await mountAuth("login");
+
+    expect(wrapper.classes()).not.toContain("auth-screen--admin");
+  });
 });

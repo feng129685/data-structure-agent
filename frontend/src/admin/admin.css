@@ -253,13 +253,17 @@
   min-height: 40px;
   padding: 0 14px;
   border: 1px solid rgba(23, 38, 43, 0.18);
+  border-top-color: rgba(255, 255, 255, 0.82);
+  border-right-color: rgba(214, 103, 145, 0.42);
+  border-bottom-color: rgba(78, 177, 142, 0.38);
+  border-left-color: rgba(49, 189, 213, 0.5);
   border-radius: 8px;
   --liquid-fill-start: rgba(255, 255, 255, 0.74);
   --liquid-fill-end: rgba(240, 247, 245, 0.58);
-  --liquid-rim-cyan: rgba(64, 155, 178, 0.22);
-  --liquid-rim-pink: rgba(190, 103, 135, 0.18);
-  --liquid-rim-mint: rgba(81, 157, 132, 0.16);
-  --liquid-rim-gold: rgba(186, 145, 75, 0.12);
+  --liquid-rim-cyan: rgba(49, 189, 213, 0.48);
+  --liquid-rim-pink: rgba(214, 103, 145, 0.44);
+  --liquid-rim-mint: rgba(78, 177, 142, 0.32);
+  --liquid-rim-gold: rgba(228, 174, 82, 0.3);
   background:
     radial-gradient(110% 150% at var(--liquid-x, 50%) var(--liquid-y, 50%), rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0) 58%),
     linear-gradient(135deg, var(--liquid-fill-start), var(--liquid-fill-end));
@@ -306,46 +310,21 @@
   transition: opacity 140ms ease, transform 120ms var(--admin-ease);
 }
 
-/* Fallback edge separation is entirely inset, never a colored outline. */
+/* Chromatic separation stays inside the glass, so it reads as refraction, not a glow. */
 .admin-page .button::after,
 .app-frame--admin .app-user .button::after,
 .app-frame--admin .admin-mobile-nav-layer__close::after,
 .app-frame--admin .admin-menu-toggle::after {
   z-index: 0;
-  inset: 0;
-  border: 1px solid rgba(255, 255, 255, 0.36);
+  inset: 1px;
+  border: 0;
   box-shadow:
-    inset 0.65px 0 0 var(--liquid-rim-cyan),
-    inset -0.65px 0 0 var(--liquid-rim-pink),
-    inset 0 0.5px 0 var(--liquid-rim-gold),
-    inset 0 -0.5px 0 var(--liquid-rim-mint);
-  opacity: 0.32;
+    inset 1.1px 0 0 var(--liquid-rim-cyan),
+    inset -1.1px 0 0 var(--liquid-rim-pink),
+    inset 0 0.8px 0 var(--liquid-rim-gold),
+    inset 0 -0.8px 0 var(--liquid-rim-mint);
+  opacity: 0.68;
   transition: opacity 140ms ease, transform 120ms var(--admin-ease);
-}
-
-@supports ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
-  .admin-page .button::after,
-  .app-frame--admin .app-user .button::after,
-  .app-frame--admin .admin-mobile-nav-layer__close::after,
-  .app-frame--admin .admin-menu-toggle::after {
-    inset: 0;
-    padding: 0.75px;
-    border: 0;
-    background: linear-gradient(
-      125deg,
-      rgba(64, 155, 178, 0.28) 0%,
-      rgba(255, 255, 255, 0.64) 24%,
-      rgba(255, 255, 255, 0.12) 50%,
-      rgba(190, 103, 135, 0.22) 76%,
-      rgba(81, 157, 132, 0.2) 100%
-    );
-    box-shadow: none;
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    mask-composite: exclude;
-    filter: none;
-  }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -355,7 +334,6 @@
   .app-frame--admin .admin-menu-toggle:not(:disabled):hover {
     --liquid-fill-start: rgba(255, 255, 255, 0.84);
     --liquid-fill-end: rgba(239, 247, 245, 0.68);
-    border-color: rgba(23, 38, 43, 0.28);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.96),
       inset 0 -1px 0 rgba(23, 38, 43, 0.1),
@@ -392,7 +370,7 @@
 .app-frame--admin .admin-mobile-nav-layer__close:not(:disabled):active::before,
 .app-frame--admin .admin-mobile-nav-layer__close.is-liquid-pressed::before,
 .app-frame--admin .admin-menu-toggle:not(:disabled):active::before,
-.app-frame--admin .admin-menu-toggle.is-liquid-pressed::before { opacity: 0.7; transform: scaleX(1.025) scaleY(1.08); }
+.app-frame--admin .admin-menu-toggle.is-liquid-pressed::before { opacity: 0.64; transform: scaleX(1.006) scaleY(1.018); }
 
 .admin-page .button:not(:disabled):active::after,
 .admin-page .button.is-liquid-pressed::after,
@@ -401,12 +379,16 @@
 .app-frame--admin .admin-mobile-nav-layer__close:not(:disabled):active::after,
 .app-frame--admin .admin-mobile-nav-layer__close.is-liquid-pressed::after,
 .app-frame--admin .admin-menu-toggle:not(:disabled):active::after,
-.app-frame--admin .admin-menu-toggle.is-liquid-pressed::after { opacity: 0.78; transform: scaleX(1.035) scaleY(1.1); }
+.app-frame--admin .admin-menu-toggle.is-liquid-pressed::after { opacity: 0.86; transform: scaleX(1.014) scaleY(1.032); }
 
 .admin-page .button--primary {
   --liquid-fill-start: rgba(20, 124, 115, 0.94);
   --liquid-fill-end: rgba(11, 98, 92, 0.9);
   border-color: rgba(7, 83, 78, 0.58);
+  border-top-color: rgba(214, 255, 250, 0.74);
+  border-right-color: rgba(255, 140, 190, 0.76);
+  border-bottom-color: rgba(3, 69, 64, 0.94);
+  border-left-color: rgba(73, 218, 232, 0.88);
   color: #ffffff;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
@@ -418,7 +400,6 @@
   .admin-page .button--primary:not(:disabled):hover {
     --liquid-fill-start: #16877c;
     --liquid-fill-end: #0a5a54;
-    color: #ffffff;
   }
 }
 

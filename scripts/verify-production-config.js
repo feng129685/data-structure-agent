@@ -195,6 +195,7 @@ function verifyOptionalDeploymentContract() {
   assert.doesNotMatch(preflight, /AUTH_MAIL_ENABLED\)"\s*=~\s*\^\(true\|1\|yes\|on\)/);
   assert.match(preflight, /AUTH_MAIL_ENABLED/);
   assert.match(preflight, /BOOTSTRAP_ADMIN_PROVISION_ENABLED/);
+  assert.match(preflight, /BOOTSTRAP_ADMIN_PROVISION_RECONCILE_EXISTING/);
   assert.match(preflight, /clear BOOTSTRAP_ADMIN_PROVISION_\* after successful startup/);
   assert.match(preflight, /caddy_mode/);
   assert.match(deploy, /host Caddy mode/);
@@ -241,6 +242,7 @@ function verifyOptionalDeploymentContract() {
   assert.match(springApplication, /base-url:\s+\$\{MODEL_BASE_URL:\}/);
   assert.match(springApplication, /name:\s+\$\{MODEL_NAME:\}/);
   assert.match(springApplication, /enabled:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_ENABLED:false\}/);
+  assert.match(springApplication, /reconcile-existing:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_RECONCILE_EXISTING:false\}/);
   assert.match(springApplication, /email:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_EMAIL:\}/);
   assert.match(springApplication, /username:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_USERNAME:\}/);
   assert.match(springApplication, /password:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_PASSWORD:\}/);
@@ -278,6 +280,7 @@ function verifyOptionalDeploymentContract() {
   assert.match(compose, /mem_reservation:\s+\$\{CADDY_MEMORY_RESERVATION:-64m\}/);
   assert.match(compose, /NODE_OPTIONS:\s+"--max-old-space-size=\$\{NODE_MAX_OLD_SPACE_MB:-160\}"/);
   assert.match(compose, /BOOTSTRAP_ADMIN_PROVISION_ENABLED:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_ENABLED:-false\}/);
+  assert.match(compose, /BOOTSTRAP_ADMIN_PROVISION_RECONCILE_EXISTING:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_RECONCILE_EXISTING:-false\}/);
   assert.match(compose, /BOOTSTRAP_ADMIN_PROVISION_EMAIL:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_EMAIL:-\}/);
   assert.match(compose, /BOOTSTRAP_ADMIN_PROVISION_USERNAME:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_USERNAME:-\}/);
   assert.match(compose, /BOOTSTRAP_ADMIN_PROVISION_PASSWORD:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_PASSWORD:-\}/);
@@ -305,6 +308,7 @@ function verifyOptionalDeploymentContract() {
   assert.match(productionEnv, /^NODE_MAX_OLD_SPACE_MB=160$/m);
   assert.match(productionEnv, /^PDF_SOURCE_DIR_HOST=\/srv\/structify\/private\/pdfs$/m);
   assert.match(productionEnv, /^BOOTSTRAP_ADMIN_PROVISION_ENABLED=false$/m);
+  assert.match(productionEnv, /^BOOTSTRAP_ADMIN_PROVISION_RECONCILE_EXISTING=false$/m);
   assert.match(productionEnv, /^BOOTSTRAP_ADMIN_PROVISION_EMAIL=$/m);
   assert.match(productionEnv, /^BOOTSTRAP_ADMIN_PROVISION_USERNAME=$/m);
   assert.match(productionEnv, /^BOOTSTRAP_ADMIN_PROVISION_PASSWORD=$/m);

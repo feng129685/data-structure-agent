@@ -51,6 +51,22 @@ public class JdbcUserRepository implements UserRepository {
     }
 
     @Override
+    public Optional<UserAccount> findAnyByEmail(String email) {
+        return findAny(
+            "SELECT id, email, username, password_hash FROM users WHERE email = ?",
+            email
+        );
+    }
+
+    @Override
+    public Optional<UserAccount> findAnyByUsername(String normalizedUsername) {
+        return findAny(
+            "SELECT id, email, username, password_hash FROM users WHERE username_normalized = ?",
+            normalizedUsername
+        );
+    }
+
+    @Override
     public Optional<UserAccount> findById(long id) {
         List<UserAccount> users = jdbc.query(
             "SELECT id, email, username, password_hash FROM users WHERE id = ? AND status = 'ACTIVE'",
@@ -101,6 +117,50 @@ public class JdbcUserRepository implements UserRepository {
         if (updated != 1) {
             throw new IllegalStateException("Active user disappeared during password reset");
         }
+    }
+
+    @Override
+    public void reconcileAdministrator(
+        long userId,
+        String email,
+        String username,
+        String passwordHash,
+        Set<String> roles
+    ) {
+        int updated = jdbc.update(
+            """
+                UPDATE users
+                SET email = ?, username = ?, username_normalized = ?, password_hash = ?,
+                    status = 'ACTIVE', disabled_reason = NULL, disabled_at = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+            email,
+            username,
+            UsernamePolicy.lookupKey(username),
+            passwordHash,
+            userId
+        );
+        if (updated != 1) {
+            throw new IllegalStateException("Administrator account disappeared during reconciliation");
+        }
+        jdbc.update("DELETE FROM user_roles WHERE user_id = ?", userId);
+        for (String role : roles.stream().sorted().toList()) {
+            jdbc.update("INSERT INTO user_roles (user_id, role) VALUES (?, ?)", userId, role);
+        }
+    }
+
+    private Optional<UserAccount> findAny(String sql, String value) {
+        List<UserAccount> users = jdbc.query(
+            sql,
+            (row, index) -> account(
+                row.getLong("id"),
+                row.getString("email"),
+                row.getString("username"),
+                row.getString("password_hash")
+            ),
+            value
+        );
+        return users.stream().findFirst();
     }
 
     private UserAccount account(long id, String email, String username, String passwordHash) {

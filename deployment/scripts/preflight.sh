@@ -323,8 +323,16 @@ expected_cors_origins="https://structify.cn,https://admin.structify.cn"
 [[ -z "$(env_value BOOTSTRAP_ADMIN_EMAIL)" ]] || die "BOOTSTRAP_ADMIN_EMAIL must be empty in production"
 bootstrap_provision_enabled="$(env_value BOOTSTRAP_ADMIN_PROVISION_ENABLED)"
 bootstrap_provision_enabled="${bootstrap_provision_enabled:-false}"
+bootstrap_provision_reconcile_existing="$(env_value BOOTSTRAP_ADMIN_PROVISION_RECONCILE_EXISTING)"
+bootstrap_provision_reconcile_existing="${bootstrap_provision_reconcile_existing:-false}"
+case "$bootstrap_provision_reconcile_existing" in
+  false|0|no|off|true|1|yes|on) ;;
+  *) die "BOOTSTRAP_ADMIN_PROVISION_RECONCILE_EXISTING must be boolean" ;;
+esac
 case "$bootstrap_provision_enabled" in
   false|0|no|off)
+    [[ "$bootstrap_provision_reconcile_existing" =~ ^(false|0|no|off)$ ]] \
+      || die "BOOTSTRAP_ADMIN_PROVISION_RECONCILE_EXISTING requires BOOTSTRAP_ADMIN_PROVISION_ENABLED=true"
     for key in BOOTSTRAP_ADMIN_PROVISION_EMAIL BOOTSTRAP_ADMIN_PROVISION_USERNAME BOOTSTRAP_ADMIN_PROVISION_PASSWORD; do
       [[ -z "$(env_value "$key")" ]] || die "$key must be empty while BOOTSTRAP_ADMIN_PROVISION_ENABLED is false"
     done
@@ -335,6 +343,9 @@ case "$bootstrap_provision_enabled" in
       [[ -n "$value" ]] || die "$key is required when BOOTSTRAP_ADMIN_PROVISION_ENABLED is true"
       [[ "$value" != __*__ ]] || die "$key still contains a placeholder"
     done
+    if [[ "$bootstrap_provision_reconcile_existing" =~ ^(true|1|yes|on)$ ]]; then
+      log "one-time administrator reconciliation is enabled for a single matching account"
+    fi
     log "one-time administrator provisioning is enabled; clear BOOTSTRAP_ADMIN_PROVISION_* after successful startup"
     ;;
   *) die "BOOTSTRAP_ADMIN_PROVISION_ENABLED must be boolean" ;;

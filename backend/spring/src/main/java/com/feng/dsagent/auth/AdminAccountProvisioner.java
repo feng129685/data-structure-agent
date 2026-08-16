@@ -47,6 +47,55 @@ public class AdminAccountProvisioner {
         }
     }
 
+    /**
+     * Provision a bootstrap administrator, optionally repairing exactly one
+     * already-existing account. Callers must gate reconciliation explicitly.
+     */
+    @Transactional
+    public UserAccount provisionAdministrator(
+        String email,
+        String username,
+        String password,
+        boolean reconcileExisting
+    ) {
+        if (!reconcileExisting) {
+            return createAdministrator(email, username, password);
+        }
+
+        String normalizedEmail = normalizeEmail(email);
+        String normalizedUsername = UsernamePolicy.normalizeRequired(username);
+        validatePassword(password);
+        String usernameKey = UsernamePolicy.lookupKey(normalizedUsername);
+
+        UserAccount emailMatch = users.findAnyByEmail(normalizedEmail).orElse(null);
+        UserAccount usernameMatch = users.findAnyByUsername(usernameKey).orElse(null);
+        if (emailMatch == null && usernameMatch == null) {
+            try {
+                return users.create(normalizedEmail, normalizedUsername, passwords.encode(password), ADMIN_ROLES);
+            } catch (DuplicateKeyException error) {
+                throw provisionConflict();
+            }
+        }
+        if (emailMatch != null && usernameMatch != null && emailMatch.id() != usernameMatch.id()) {
+            throw targetMismatch();
+        }
+
+        long targetUserId = emailMatch != null ? emailMatch.id() : usernameMatch.id();
+        try {
+            users.reconcileAdministrator(
+                targetUserId,
+                normalizedEmail,
+                normalizedUsername,
+                passwords.encode(password),
+                ADMIN_ROLES
+            );
+        } catch (DuplicateKeyException error) {
+            throw provisionConflict();
+        }
+        return users.findById(targetUserId)
+            .orElseThrow(() -> new IllegalStateException("Administrator account is unavailable after reconciliation"));
+    }
+
     static String normalizeEmail(String email) {
         String normalized = email == null ? "" : email.trim().toLowerCase(java.util.Locale.ROOT);
         if (!normalized.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
@@ -59,6 +108,22 @@ public class AdminAccountProvisioner {
         if (password == null || password.isBlank() || password.length() < 8 || password.length() > 128) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "AUTH_PASSWORD_INVALID", "密码长度必须为 8 到 128 位");
         }
+    }
+
+    private ApiException targetMismatch() {
+        return new ApiException(
+            HttpStatus.CONFLICT,
+            "AUTH_ADMIN_PROVISION_TARGET_MISMATCH",
+            "管理员邮箱和用户名指向不同账户，已拒绝修复"
+        );
+    }
+
+    private ApiException provisionConflict() {
+        return new ApiException(
+            HttpStatus.CONFLICT,
+            "AUTH_ADMIN_PROVISION_CONFLICT",
+            "管理员账户状态冲突，未执行修复"
+        );
     }
 
     private ApiException emailConflict() {
