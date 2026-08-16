@@ -6,6 +6,7 @@ export type LicenseScope = "PUBLIC" | "TEAM_ONLY" | "CLASSROOM_ONLY";
 export interface User {
   id: number;
   email: string;
+  username?: string | null;
   roles: Role[];
 }
 
@@ -23,7 +24,8 @@ export interface VerificationCodeDelivery {
   message: string;
 }
 export interface LoginRequest {
-  email: string;
+  email?: string;
+  username?: string;
   password: string;
 }
 export interface RegisterRequest {

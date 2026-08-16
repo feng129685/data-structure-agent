@@ -88,4 +88,34 @@ describe("AdminReviewsView", () => {
     expect(wrapper.text()).toContain("req-review-409");
     expect(wrapper.text()).not.toContain("审核状态已更新。");
   });
+
+  it("does not send a duplicate status transition", async () => {
+    const wrapper = mount(AdminReviewsView);
+    await flushPromises();
+    await wrapper.get("button[data-action='open-review']").trigger("click");
+    await flushPromises();
+
+    await wrapper.get("button[data-action='update-review']").trigger("click");
+    await flushPromises();
+
+    expect(updateReviewStatus).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("目标状态与当前状态相同");
+  });
+
+  it("refreshes the review list after a successful state change", async () => {
+    reviews.mockReset()
+      .mockResolvedValueOnce({ items: [reviewItem], page: 0, size: 20, total: 1 })
+      .mockResolvedValueOnce({ items: [], page: 0, size: 20, total: 0 });
+    updateReviewStatus.mockResolvedValue({ ...reviewItem, status: "VERIFIED" });
+    const wrapper = mount(AdminReviewsView);
+    await flushPromises();
+    await wrapper.get("button[data-action='open-review']").trigger("click");
+    await flushPromises();
+    await wrapper.get("select[data-field='next-status']").setValue("VERIFIED");
+    await wrapper.get("button[data-action='update-review']").trigger("click");
+    await flushPromises();
+
+    expect(reviews).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain("审核队列为空");
+  });
 });

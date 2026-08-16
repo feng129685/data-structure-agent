@@ -22,9 +22,30 @@ public class JdbcUserRepository implements UserRepository {
     @Override
     public Optional<UserAccount> findByEmail(String email) {
         List<UserAccount> users = jdbc.query(
-            "SELECT id, email, password_hash FROM users WHERE email = ? AND status = 'ACTIVE'",
-            (row, index) -> account(row.getLong("id"), row.getString("email"), row.getString("password_hash")),
+            "SELECT id, email, username, password_hash FROM users WHERE email = ? AND status = 'ACTIVE'",
+            (row, index) -> account(
+                row.getLong("id"),
+                row.getString("email"),
+                row.getString("username"),
+                row.getString("password_hash")
+            ),
             email
+        );
+        return users.stream().findFirst();
+    }
+
+    @Override
+    public Optional<UserAccount> findByUsername(String normalizedUsername) {
+        List<UserAccount> users = jdbc.query(
+            "SELECT id, email, username, password_hash FROM users "
+                + "WHERE username_normalized = ? AND status = 'ACTIVE'",
+            (row, index) -> account(
+                row.getLong("id"),
+                row.getString("email"),
+                row.getString("username"),
+                row.getString("password_hash")
+            ),
+            normalizedUsername
         );
         return users.stream().findFirst();
     }
@@ -32,8 +53,13 @@ public class JdbcUserRepository implements UserRepository {
     @Override
     public Optional<UserAccount> findById(long id) {
         List<UserAccount> users = jdbc.query(
-            "SELECT id, email, password_hash FROM users WHERE id = ? AND status = 'ACTIVE'",
-            (row, index) -> account(row.getLong("id"), row.getString("email"), row.getString("password_hash")),
+            "SELECT id, email, username, password_hash FROM users WHERE id = ? AND status = 'ACTIVE'",
+            (row, index) -> account(
+                row.getLong("id"),
+                row.getString("email"),
+                row.getString("username"),
+                row.getString("password_hash")
+            ),
             id
         );
         return users.stream().findFirst();
@@ -41,15 +67,17 @@ public class JdbcUserRepository implements UserRepository {
 
     @Override
     @Transactional
-    public UserAccount create(String email, String passwordHash, Set<String> roles) {
+    public UserAccount create(String email, String username, String passwordHash, Set<String> roles) {
         GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
         jdbc.update(connection -> {
             PreparedStatement statement = connection.prepareStatement(
-                "INSERT INTO users (email, password_hash) VALUES (?, ?)",
+                "INSERT INTO users (email, username, username_normalized, password_hash) VALUES (?, ?, ?, ?)",
                 new String[] {"id"}
             );
             statement.setString(1, email);
-            statement.setString(2, passwordHash);
+            statement.setString(2, username);
+            statement.setString(3, username == null ? null : UsernamePolicy.lookupKey(username));
+            statement.setString(4, passwordHash);
             return statement;
         }, keyHolder);
         Number key = keyHolder.getKey();
@@ -60,7 +88,7 @@ public class JdbcUserRepository implements UserRepository {
         for (String role : roles) {
             jdbc.update("INSERT INTO user_roles (user_id, role) VALUES (?, ?)", userId, role);
         }
-        return new UserAccount(userId, email, passwordHash, roles);
+        return new UserAccount(userId, email, username, passwordHash, roles);
     }
 
     @Override
@@ -75,12 +103,12 @@ public class JdbcUserRepository implements UserRepository {
         }
     }
 
-    private UserAccount account(long id, String email, String passwordHash) {
+    private UserAccount account(long id, String email, String username, String passwordHash) {
         Set<String> roles = new LinkedHashSet<>(jdbc.queryForList(
             "SELECT role FROM user_roles WHERE user_id = ? ORDER BY role",
             String.class,
             id
         ));
-        return new UserAccount(id, email, passwordHash, roles);
+        return new UserAccount(id, email, username, passwordHash, roles);
     }
 }

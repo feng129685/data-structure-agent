@@ -13,6 +13,7 @@ import StatusBadge from "../../shared/components/StatusBadge.vue";
 const capability = ref<AdminCapability | null>(null);
 const loading = ref(true);
 const error = ref("");
+let loadRequest = 0;
 
 const modules = computed(() => {
   const labels: Record<string, { title: string; description: string; path: string }> = {
@@ -21,19 +22,25 @@ const modules = computed(() => {
     backgroundTasks: { title: "后台任务", description: "查看维护任务生命周期，恢复超时任务并处理失败任务。", path: "/admin/tasks" },
     audit: { title: "审计日志", description: "只读查看管理员操作摘要、结果和 requestId。", path: "/admin/audit" },
     modelSettings: { title: "模型配置", description: "配置后端管理的模型连接，浏览器不会直接接触 provider。", path: "/admin/settings" },
+    mailSettings: { title: "邮件发送设置", description: "配置服务端托管的验证码邮件投递、模板和连接测试。", path: "/admin/mail" },
   };
   return Object.entries(labels).map(([key, info]) => ({ key, ...info, status: capability.value?.modules?.[key] }));
 });
 
-async function load() {
+async function load(): Promise<boolean> {
+  const request = ++loadRequest;
   loading.value = true;
   error.value = "";
   try {
-    capability.value = await adminApi.capabilities();
+    const nextCapability = await adminApi.capabilities();
+    if (request !== loadRequest) return false;
+    capability.value = nextCapability;
+    return true;
   } catch (failure) {
-    error.value = adminErrorMessage(failure, "读取管理能力");
+    if (request === loadRequest) error.value = adminErrorMessage(failure, "读取管理能力");
+    return false;
   } finally {
-    loading.value = false;
+    if (request === loadRequest) loading.value = false;
   }
 }
 
@@ -49,27 +56,59 @@ function statusTone(status?: AdminModuleCapability): "success" | "warning" | "da
   return status.available ? "success" : status.status === "NOT_CONFIGURED" ? "warning" : "danger";
 }
 
+function capabilityReason(reason?: string | null) {
+  const explanations: Record<string, string> = {
+    NOT_CONFIGURED: "该模块尚未完成服务端配置。",
+    MASTER_KEY_UNAVAILABLE: "部署环境缺少用于加密配置的主密钥。",
+    MODEL_CONFIG_UNAVAILABLE: "模型配置服务暂时不可用。",
+    MAIL_CONFIG_UNAVAILABLE: "邮件配置服务暂时不可用。",
+    PERSISTED_CONFIGURATION_DISABLED: "已保存配置当前处于停用状态。",
+    PERSISTED_QUOTA_NOT_CONFIGURED: "已保存配置尚未设置可用额度。",
+  };
+  return reason ? explanations[reason] || `服务返回状态：${reason}` : "";
+}
+
 onMounted(load);
 </script>
 
 <template>
-  <AdminPageFrame title="管理总览" description="从真实能力接口查看当前服务状态和管理入口。未提供聚合统计时不显示推测数量。">
-    <template #actions><button class="button button--small" type="button" :disabled="loading" @click="load">刷新状态</button></template>
+  <AdminPageFrame
+    title="管理总览"
+    description="查看服务状态和可用的管理模块。"
+  >
+    <template #actions>
+      <button class="button button--small" type="button" :disabled="loading" @click="load">刷新</button>
+    </template>
+
     <LoadingState v-if="loading" label="正在读取管理能力…" />
     <ErrorState v-else-if="error" title="管理能力读取失败" :message="error"><RetryButton @retry="load" /></ErrorState>
     <EmptyState v-else-if="!capability" title="暂无能力数据" message="服务未返回管理模块状态，请稍后重试。"><RetryButton @retry="load" /></EmptyState>
+
     <template v-else>
-      <section class="admin-panel">
-        <div class="admin-detail__header"><div><h2>Spring v1 服务</h2><p>服务版本和可用性来自 `/api/v1/admin/capabilities`。</p></div><StatusBadge :label="capability.service.status === 'AVAILABLE' ? '服务可用' : '服务不可用'" :tone="capability.service.status === 'AVAILABLE' ? 'success' : 'danger'" /></div>
-        <dl><dt>版本</dt><dd class="admin-code">{{ capability.service.version }}</dd><dt>当前管理员</dt><dd class="admin-code">#{{ capability.userId }}</dd></dl>
+      <section class="admin-panel admin-motion-enter" aria-labelledby="service-status-title">
+        <div class="admin-panel__header">
+          <div><h2 id="service-status-title">服务状态</h2><p>版本：{{ capability.service.version }}</p></div>
+          <StatusBadge :label="capability.service.status === 'AVAILABLE' ? '服务可用' : '服务不可用'" :tone="capability.service.status === 'AVAILABLE' ? 'success' : 'danger'" />
+        </div>
       </section>
-      <section class="admin-grid" aria-label="管理模块">
-        <article v-for="item in modules" :key="item.key" class="admin-module">
-          <div class="admin-module__meta"><span class="admin-code">{{ item.key }}</span><StatusBadge :label="statusLabel(item.status)" :tone="statusTone(item.status)" /></div>
-          <h2>{{ item.title }}</h2><p>{{ item.description }}</p>
-          <p v-if="item.status?.reason" class="admin-danger">原因：{{ item.status.reason }}</p>
-          <RouterLink class="button button--small" :to="item.path">进入{{ item.title }}</RouterLink>
-        </article>
+
+      <section class="admin-module-rail" aria-label="管理模块">
+        <header class="admin-section-head">
+          <h2>管理模块</h2>
+        </header>
+        <div class="admin-rail-grid">
+          <article v-for="item in modules" :key="item.key" class="admin-rail admin-motion-enter">
+            <div class="admin-rail__topline">
+              <StatusBadge :label="statusLabel(item.status)" :tone="statusTone(item.status)" />
+            </div>
+            <div class="admin-rail__content">
+              <h3>{{ item.title }}</h3>
+              <p>{{ item.description }}</p>
+              <p v-if="item.status?.reason" class="admin-danger">原因：{{ capabilityReason(item.status.reason) }}</p>
+            </div>
+            <RouterLink class="button button--small admin-rail__action" :to="item.path">进入{{ item.title }}</RouterLink>
+          </article>
+        </div>
       </section>
     </template>
   </AdminPageFrame>

@@ -18,6 +18,7 @@ const feedback = ref("");
 const error = ref("");
 const title = computed(() => props.mode === "login" ? "登录数据结构工作台" : props.mode === "register" ? "创建学习账号" : "重置密码");
 const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim()));
+const loginIdentifier = computed(() => email.value.trim());
 const canRequestCode = computed(() => props.mode !== "login" && emailValid.value && !codePending.value && cooldownSeconds.value === 0);
 let cooldownTimer: number | undefined;
 
@@ -78,7 +79,10 @@ async function submit() {
   feedback.value = "";
   error.value = "";
   try {
-    if (props.mode === "login") await auth.login({ email: email.value, password: password.value });
+    if (props.mode === "login") {
+      const identity = loginIdentifier.value;
+      await auth.login(emailValid.value ? { email: identity, password: password.value } : { username: identity, password: password.value });
+    }
     if (props.mode === "register") await auth.register({ email: email.value, code: code.value, password: password.value });
     if (props.mode === "reset") await auth.resetPassword({ email: email.value, code: code.value, password: password.value });
     await router.replace(typeof route.query.redirect === "string" ? route.query.redirect : "/");
@@ -95,12 +99,19 @@ onBeforeUnmount(clearCooldown);
 <template>
   <section class="auth-screen" aria-labelledby="auth-title">
     <div class="auth-screen__intro">
-      <p class="home-screen__kicker">STRUCTIFY / ACCESS</p>
       <h1 id="auth-title">{{ title }}</h1>
       <p>会话由 Spring v1 服务端管理，浏览器仅保留当前页面所需状态。</p>
     </div>
     <form class="auth-form" @submit.prevent="submit">
-      <label>邮箱<input v-model="email" type="email" autocomplete="email" required /></label>
+      <label>
+        {{ props.mode === "login" ? "邮箱或用户名" : "邮箱" }}
+        <input
+          v-model="email"
+          :type="props.mode === 'login' ? 'text' : 'email'"
+          :autocomplete="props.mode === 'login' ? 'username' : 'email'"
+          required
+        />
+      </label>
       <label v-if="props.mode !== 'login'" class="auth-code-field">
         <span>验证码</span>
         <div class="auth-code-field__controls">

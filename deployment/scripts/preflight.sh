@@ -321,6 +321,24 @@ expected_cors_origins="https://structify.cn,https://admin.structify.cn"
 [[ "$(env_value CORS_ALLOWED_ORIGINS)" == "$expected_cors_origins" ]] \
   || die "CORS_ALLOWED_ORIGINS must be exactly $expected_cors_origins"
 [[ -z "$(env_value BOOTSTRAP_ADMIN_EMAIL)" ]] || die "BOOTSTRAP_ADMIN_EMAIL must be empty in production"
+bootstrap_provision_enabled="$(env_value BOOTSTRAP_ADMIN_PROVISION_ENABLED)"
+bootstrap_provision_enabled="${bootstrap_provision_enabled:-false}"
+case "$bootstrap_provision_enabled" in
+  false|0|no|off)
+    for key in BOOTSTRAP_ADMIN_PROVISION_EMAIL BOOTSTRAP_ADMIN_PROVISION_USERNAME BOOTSTRAP_ADMIN_PROVISION_PASSWORD; do
+      [[ -z "$(env_value "$key")" ]] || die "$key must be empty while BOOTSTRAP_ADMIN_PROVISION_ENABLED is false"
+    done
+    ;;
+  true|1|yes|on)
+    for key in BOOTSTRAP_ADMIN_PROVISION_EMAIL BOOTSTRAP_ADMIN_PROVISION_USERNAME BOOTSTRAP_ADMIN_PROVISION_PASSWORD; do
+      value="$(env_value "$key")"
+      [[ -n "$value" ]] || die "$key is required when BOOTSTRAP_ADMIN_PROVISION_ENABLED is true"
+      [[ "$value" != __*__ ]] || die "$key still contains a placeholder"
+    done
+    log "one-time administrator provisioning is enabled; clear BOOTSTRAP_ADMIN_PROVISION_* after successful startup"
+    ;;
+  *) die "BOOTSTRAP_ADMIN_PROVISION_ENABLED must be boolean" ;;
+esac
 [[ -z "$(env_value TEACHER_EMAILS)" ]] || die "TEACHER_EMAILS must be empty in production"
 [[ "$(env_value ALLOW_FIRST_USER_TEACHER)" =~ ^(false|0|no|off)$ ]] || die "ALLOW_FIRST_USER_TEACHER must be false"
 [[ "$(env_value JWT_SECRET)" =~ ^.{64,}$ ]] || die "JWT_SECRET must be at least 64 characters"

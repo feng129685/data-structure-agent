@@ -1,6 +1,8 @@
 package com.feng.dsagent.admin;
 
 import com.feng.dsagent.common.ApiException;
+import com.feng.dsagent.mail.MailConfigController;
+import com.feng.dsagent.mail.MailConfigService;
 import com.feng.dsagent.modelconfig.ModelConfigService;
 import com.feng.dsagent.security.AuthenticatedUser;
 import java.time.Instant;
@@ -21,10 +23,12 @@ class AdminService {
 
     private final AdminRepository repository;
     private final ModelConfigService modelConfig;
+    private final MailConfigService mailConfig;
 
-    AdminService(AdminRepository repository, ModelConfigService modelConfig) {
+    AdminService(AdminRepository repository, ModelConfigService modelConfig, MailConfigService mailConfig) {
         this.repository = repository;
         this.modelConfig = modelConfig;
+        this.mailConfig = mailConfig;
     }
 
     AdminCapabilityView capabilities(AuthenticatedUser user) {
@@ -40,6 +44,15 @@ class AdminService {
                 modelSettings.available(),
                 modelSettings.available() ? "AVAILABLE" : "UNAVAILABLE",
                 modelSettings.reason()
+            )
+        );
+        MailConfigController.MailConfigCapabilityView mailSettings = mailConfig.capability();
+        modules.put(
+            "mailSettings",
+            new AdminModuleCapability(
+                mailSettings.available(),
+                mailSettings.available() ? "AVAILABLE" : "UNAVAILABLE",
+                mailSettings.reason()
             )
         );
         return new AdminCapabilityView(
@@ -280,6 +293,7 @@ class AdminService {
         return new AdminUserView(
             user.id(),
             user.email(),
+            user.username(),
             user.status().name(),
             user.disabledReason(),
             user.disabledAt(),
@@ -307,6 +321,7 @@ record AdminServiceStatus(String name, String version, String status) {
 record AdminUserView(
     long id,
     String email,
+    String username,
     String status,
     String disabledReason,
     Instant disabledAt,

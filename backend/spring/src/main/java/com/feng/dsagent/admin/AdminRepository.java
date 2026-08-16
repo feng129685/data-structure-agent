@@ -32,7 +32,7 @@ class AdminRepository {
         pageParameters.add((long) query.page() * query.size());
         List<AdminUser> items = jdbc.query(
             """
-                SELECT u.id, u.email, u.status, u.disabled_reason, u.disabled_at, u.created_at, u.updated_at
+                SELECT u.id, u.email, u.username, u.status, u.disabled_reason, u.disabled_at, u.created_at, u.updated_at
                 FROM users u
                 %s
                 ORDER BY u.id ASC
@@ -47,7 +47,7 @@ class AdminRepository {
     Optional<AdminUser> findUser(long userId) {
         return jdbc.query(
             """
-                SELECT u.id, u.email, u.status, u.disabled_reason, u.disabled_at, u.created_at, u.updated_at
+                SELECT u.id, u.email, u.username, u.status, u.disabled_reason, u.disabled_at, u.created_at, u.updated_at
                 FROM users u WHERE u.id = ?
                 """,
             (row, index) -> user(row.getLong("id"), row),
@@ -58,7 +58,7 @@ class AdminRepository {
     Optional<AdminUser> lockUser(long userId) {
         return jdbc.query(
             """
-                SELECT u.id, u.email, u.status, u.disabled_reason, u.disabled_at, u.created_at, u.updated_at
+                SELECT u.id, u.email, u.username, u.status, u.disabled_reason, u.disabled_at, u.created_at, u.updated_at
                 FROM users u WHERE u.id = ? FOR UPDATE
                 """,
             (row, index) -> user(row.getLong("id"), row),
@@ -178,8 +178,10 @@ class AdminRepository {
     private String userWhere(AdminUserQuery query, List<Object> parameters) {
         List<String> clauses = new ArrayList<>();
         if (query.search() != null) {
-            clauses.add("LOWER(u.email) LIKE ?");
-            parameters.add("%" + query.search().toLowerCase(java.util.Locale.ROOT) + "%");
+            clauses.add("(LOWER(u.email) LIKE ? OR LOWER(u.username) LIKE ?)");
+            String search = "%" + query.search().toLowerCase(java.util.Locale.ROOT) + "%";
+            parameters.add(search);
+            parameters.add(search);
         }
         if (query.status() != null) {
             clauses.add("u.status = ?");
@@ -225,6 +227,7 @@ class AdminRepository {
         return new AdminUser(
             id,
             row.getString("email"),
+            row.getString("username"),
             UserStatus.valueOf(row.getString("status")),
             row.getString("disabled_reason"),
             instant(row.getTimestamp("disabled_at")),
@@ -250,6 +253,7 @@ class AdminRepository {
 record AdminUser(
     long id,
     String email,
+    String username,
     UserStatus status,
     String disabledReason,
     Instant disabledAt,

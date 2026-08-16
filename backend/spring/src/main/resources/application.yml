@@ -62,6 +62,11 @@ app:
     expose-development-code: ${AUTH_EXPOSE_DEV_CODE:false}
     mail-enabled: ${AUTH_MAIL_ENABLED:false}
     mail-from: ${SMTP_FROM:no-reply@example.com}
+  bootstrap-admin:
+    enabled: ${BOOTSTRAP_ADMIN_PROVISION_ENABLED:false}
+    email: ${BOOTSTRAP_ADMIN_PROVISION_EMAIL:}
+    username: ${BOOTSTRAP_ADMIN_PROVISION_USERNAME:}
+    password: ${BOOTSTRAP_ADMIN_PROVISION_PASSWORD:}
   model:
     provider: ${MODEL_PROVIDER:}
     api-key: ${MODEL_API_KEY:}

@@ -30,6 +30,16 @@ class JdbcVerificationCodeRepository implements VerificationCodeRepository {
     }
 
     @Override
+    public Optional<Instant> latestCreatedAt(String email, String purpose) {
+        return jdbc.query(
+            "SELECT created_at FROM verification_codes WHERE email = ? AND purpose = ? ORDER BY id DESC LIMIT 1",
+            (row, index) -> row.getTimestamp("created_at").toInstant(),
+            email,
+            purpose
+        ).stream().findFirst();
+    }
+
+    @Override
     public Optional<VerificationCodeRecord> latestActive(String email, String purpose) {
         List<VerificationCodeRecord> rows = jdbc.query(
             "SELECT id, code_hash, attempts, expires_at FROM verification_codes "

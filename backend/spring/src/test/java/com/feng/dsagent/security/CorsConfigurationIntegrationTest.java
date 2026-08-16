@@ -43,6 +43,17 @@ class CorsConfigurationIntegrationTest {
     }
 
     @Test
+    void allowsConfiguredAdminOriginToPreflightModelConfigPut() throws Exception {
+        mockMvc.perform(options("/api/v1/admin/model-config")
+                .header(HttpHeaders.ORIGIN, "https://admin.frontend.example.test")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PUT")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization,content-type,x-request-id"))
+            .andExpect(status().isOk())
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://admin.frontend.example.test"))
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+    }
+
+    @Test
     void rejectsUnknownFrontendOrigin() throws Exception {
         mockMvc.perform(options("/api/v1/chat")
                 .header(HttpHeaders.ORIGIN, "https://untrusted.example.test")

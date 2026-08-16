@@ -6,5 +6,5 @@
   not part of the Structify web application or production deployment.
 
 Production PPT ingestion uses the reviewed offline manifest workflow described
-in `docs/production-deployment.md`; private PPT files and generated images stay
+in `PRODUCTION_DEPLOYMENT_GUIDE.md`; private PPT files and generated images stay
 outside Git and Docker image layers.

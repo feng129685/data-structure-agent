@@ -64,7 +64,7 @@ paths:
   /auth/login:
     post:
       tags: [Auth]
-      summary: Log in with email and password
+      summary: Log in with email or username and password
       requestBody:
         required: true
         content:
@@ -1070,6 +1070,82 @@ paths:
         '403': {$ref: '#/components/responses/Forbidden'}
         '409': {$ref: '#/components/responses/Conflict'}
         '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /admin/mail-config:
+    get:
+      tags: [Admin]
+      summary: Read the credential-free SMTP delivery and authentication policy configuration
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      responses:
+        '200':
+          description: Mail capability and safe configuration view; the SMTP password is never returned
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MailConfigCapability'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    put:
+      tags: [Admin]
+      summary: Save SMTP delivery, verification-code, session, and template settings
+      description: >-
+        smtpPassword is accepted only by this write endpoint, encrypted at rest, and
+        never returned. Leave it blank to preserve the current credential; set
+        clearSmtpPassword to true to remove it explicitly.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateMailConfigRequest'}
+      responses:
+        '200':
+          description: Safe persisted mail configuration view
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MailConfig'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /admin/mail-config/test-connection:
+    post:
+      tags: [Admin]
+      summary: Test an unsaved SMTP configuration without persisting it
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateMailConfigRequest'}
+      responses:
+        '200':
+          description: Non-sensitive SMTP connection result
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MailConnectionTest'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /admin/mail-config/test-email:
+    post:
+      tags: [Admin]
+      summary: Send a rendered draft verification email to the current administrator only
+      description: The recipient must match the authenticated administrator email; arbitrary test recipients are rejected.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TestMailRequest'}
+      responses:
+        '200':
+          description: Non-sensitive test delivery result
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TestMailResult'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
 components:
   securitySchemes:
     cookieAuth:
@@ -1201,13 +1277,28 @@ components:
       required: [email, code, password]
       properties:
         email: {type: string, format: email}
+        username:
+          type: string
+          nullable: true
+          pattern: '^[A-Za-z0-9_]{3,32}$'
+          description: Optional public account identifier. Case is preserved for display and compared case-insensitively.
         code: {type: string, minLength: 6, maxLength: 6}
         password: {type: string, minLength: 8, maxLength: 128}
     LoginRequest:
       type: object
-      required: [email, password]
+      required: [password]
+      oneOf:
+        - required: [email]
+        - required: [username]
       properties:
-        email: {type: string, format: email}
+        email:
+          type: string
+          maxLength: 254
+          description: Backward-compatible login identifier field. It accepts either an email address or a username.
+        username:
+          type: string
+          pattern: '^[A-Za-z0-9_]{3,32}$'
+          description: Explicit username login field. Supply this or email, not both.
         password: {type: string, maxLength: 128}
     ResetPasswordRequest:
       type: object
@@ -1228,6 +1319,10 @@ components:
       properties:
         id: {type: integer, format: int64}
         email: {type: string, format: email}
+        username:
+          type: string
+          nullable: true
+          pattern: '^[A-Za-z0-9_]{3,32}$'
         roles:
           type: array
           items: {type: string, enum: [STUDENT, TEACHER, ADMIN]}
@@ -1700,7 +1795,7 @@ components:
         modules:
           type: object
           additionalProperties: {$ref: '#/components/schemas/AdminModuleCapability'}
-          description: Includes users, audit, reviewQueue, backgroundTasks, and modelSettings.
+          description: Includes users, audit, reviewQueue, backgroundTasks, modelSettings, and mailSettings.
         service: {$ref: '#/components/schemas/AdminServiceStatus'}
     AdminModuleCapability:
       type: object
@@ -1722,6 +1817,10 @@ components:
       properties:
         id: {type: integer, format: int64}
         email: {type: string, format: email}
+        username:
+          type: string
+          nullable: true
+          pattern: '^[A-Za-z0-9_]{3,32}$'
         status: {type: string, enum: [ACTIVE, DISABLED]}
         disabledReason: {type: string, nullable: true}
         disabledAt: {type: string, format: date-time, nullable: true}
@@ -1955,3 +2054,102 @@ components:
           type: string
           pattern: '^[A-Z0-9_]{1,64}$'
           description: Controlled result code. CONNECTION_OK requires a non-blank OpenAI-compatible choices[0].message.content value; CONNECTION_RESPONSE_INVALID means a 2xx response failed that shape check. Other standard outcomes are CONNECTION_FAILED, REDIRECT_REJECTED, and UPSTREAM_REJECTED.
+    MailConfigCapability:
+      type: object
+      required: [available]
+      properties:
+        available: {type: boolean}
+        reason:
+          type: string
+          nullable: true
+          enum: [MASTER_KEY_UNAVAILABLE, MAIL_CONFIG_UNAVAILABLE]
+        configuration:
+          allOf: [{$ref: '#/components/schemas/MailConfig'}]
+          nullable: true
+    MailConfig:
+      type: object
+      required:
+        - siteName
+        - enabled
+        - smtpHost
+        - smtpPort
+        - securityMode
+        - smtpUsername
+        - smtpPasswordConfigured
+        - fromEmail
+        - fromName
+        - connectionTimeoutSeconds
+        - verificationTtlMinutes
+        - resendIntervalSeconds
+        - sessionTtlDays
+        - verificationSubject
+        - verificationTemplateHtml
+      properties:
+        siteName: {type: string, maxLength: 128}
+        enabled: {type: boolean}
+        smtpHost: {type: string, maxLength: 253}
+        smtpPort: {type: integer, minimum: 1, maximum: 65535}
+        securityMode: {type: string, enum: [NONE, STARTTLS, SSL]}
+        smtpUsername: {type: string, maxLength: 320}
+        smtpPasswordConfigured: {type: boolean, description: Indicates that an encrypted password is stored; the password itself is never returned.}
+        fromEmail: {type: string, format: email, maxLength: 254}
+        fromName: {type: string, maxLength: 128}
+        connectionTimeoutSeconds: {type: integer, minimum: 1, maximum: 30}
+        verificationTtlMinutes: {type: integer, minimum: 1, maximum: 60}
+        resendIntervalSeconds: {type: integer, minimum: 5, maximum: 3600}
+        sessionTtlDays: {type: integer, minimum: 1, maximum: 90}
+        verificationSubject: {type: string, maxLength: 300}
+        verificationTemplateHtml: {type: string, maxLength: 100000}
+        lastConnectionTestStatus: {type: string, nullable: true}
+        lastConnectionTestedAt: {type: string, format: date-time, nullable: true}
+        updatedAt: {type: string, format: date-time, nullable: true}
+    UpdateMailConfigRequest:
+      type: object
+      required:
+        - siteName
+        - enabled
+        - smtpPort
+        - securityMode
+        - clearSmtpPassword
+        - fromName
+        - connectionTimeoutSeconds
+        - verificationTtlMinutes
+        - resendIntervalSeconds
+        - sessionTtlDays
+        - verificationSubject
+        - verificationTemplateHtml
+      properties:
+        siteName: {type: string, minLength: 1, maxLength: 128}
+        enabled: {type: boolean}
+        smtpHost: {type: string, maxLength: 253}
+        smtpPort: {type: integer, minimum: 1, maximum: 65535}
+        securityMode: {type: string, enum: [NONE, STARTTLS, SSL]}
+        smtpUsername: {type: string, maxLength: 320}
+        smtpPassword: {type: string, maxLength: 4096, writeOnly: true, description: Optional write-only credential; never returned or logged.}
+        clearSmtpPassword: {type: boolean, description: Explicitly remove the stored SMTP password when true.}
+        fromEmail: {type: string, format: email, maxLength: 254}
+        fromName: {type: string, minLength: 1, maxLength: 128}
+        connectionTimeoutSeconds: {type: integer, minimum: 1, maximum: 30}
+        verificationTtlMinutes: {type: integer, minimum: 1, maximum: 60}
+        resendIntervalSeconds: {type: integer, minimum: 5, maximum: 3600}
+        sessionTtlDays: {type: integer, minimum: 1, maximum: 90}
+        verificationSubject: {type: string, minLength: 1, maxLength: 300}
+        verificationTemplateHtml: {type: string, minLength: 1, maxLength: 100000}
+    MailConnectionTest:
+      type: object
+      required: [connected, code]
+      properties:
+        connected: {type: boolean}
+        code: {type: string, pattern: '^[A-Z0-9_]{1,64}$'}
+    TestMailRequest:
+      type: object
+      required: [config, recipient]
+      properties:
+        config: {$ref: '#/components/schemas/UpdateMailConfigRequest'}
+        recipient: {type: string, format: email, maxLength: 254}
+    TestMailResult:
+      type: object
+      required: [sent, code]
+      properties:
+        sent: {type: boolean}
+        code: {type: string, pattern: '^[A-Z0-9_]{1,64}$'}

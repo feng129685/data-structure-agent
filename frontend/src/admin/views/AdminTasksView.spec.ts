@@ -58,6 +58,14 @@ describe("AdminTasksView", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
   });
 
+  it("loads all task types by default instead of pre-filtering to timeout recovery", async () => {
+    const wrapper = mount(AdminTasksView);
+    await flushPromises();
+
+    expect(tasks).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, taskType: "" }));
+    wrapper.unmount();
+  });
+
   it("loads the real task detail through the public detail action", async () => {
     const wrapper = mount(AdminTasksView);
     await flushPromises();
@@ -127,5 +135,39 @@ describe("AdminTasksView", () => {
     expect(retryTask).toHaveBeenCalledWith(13);
     expect(wrapper.text()).toContain("BACKGROUND_TASK_SERVICE_UNAVAILABLE");
     expect(wrapper.text()).toContain("req-task-503");
+  });
+
+  it("refreshes the active task list after a successful retry", async () => {
+    tasks.mockReset()
+      .mockResolvedValueOnce({ items: [failedTask], page: 0, size: 20, total: 1 })
+      .mockResolvedValueOnce({ items: [], page: 0, size: 20, total: 0 });
+    retryTask.mockResolvedValue({ ...failedTask, status: "PENDING", retryCount: 2 });
+    const wrapper = mount(AdminTasksView);
+    await flushPromises();
+
+    const retryButton = wrapper.findAll("button").find((button) => button.text() === "重试");
+    await retryButton!.trigger("click");
+    await flushPromises();
+
+    expect(tasks).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain("暂无后台任务");
+  });
+
+  it("keeps a successful timeout recovery visible when the follow-up list refresh fails", async () => {
+    tasks.mockReset()
+      .mockResolvedValueOnce({ items: [pendingTask], page: 0, size: 20, total: 1 })
+      .mockRejectedValueOnce(error(503, "BACKGROUND_TASK_SERVICE_UNAVAILABLE", "req-task-refresh-503"));
+    recoverTimeouts.mockResolvedValue({ ...pendingTask, id: 99 });
+    const wrapper = mount(AdminTasksView);
+    await flushPromises();
+
+    const recoverButton = wrapper.findAll("button").find((button) => button.text().includes("恢复超时任务"));
+    if (!recoverButton) throw new Error("Missing recovery button");
+    await recoverButton.trigger("click");
+    await flushPromises();
+
+    expect(recoverTimeouts).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain("超时恢复任务 #99 已提交，但任务列表刷新失败");
+    expect(wrapper.text()).not.toContain("后台任务读取失败");
   });
 });

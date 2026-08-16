@@ -85,6 +85,59 @@ class AuthApiIntegrationTest {
     }
 
     @Test
+    void registersAndLogsInWithAUsernameWithoutBreakingTheLegacyEmailField() throws Exception {
+        String email = "username-api@example.com";
+        String code = requestDevelopmentCode(email);
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","username":"ACha_","code":"%s","password":"correct-horse"}
+                    """.formatted(email, code)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.user.email").value(email))
+            .andExpect(jsonPath("$.user.username").value("ACha_"));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"ACha_","password":"correct-horse"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.user.username").value("ACha_"));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"username":"acha_","password":"correct-horse"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.user.email").value(email));
+    }
+
+    @Test
+    void rejectsUsernameConflicts() throws Exception {
+        String firstEmail = "username-conflict-first@example.com";
+        String firstCode = requestDevelopmentCode(firstEmail);
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","username":"ACha_","code":"%s","password":"correct-horse"}
+                    """.formatted(firstEmail, firstCode)))
+            .andExpect(status().isOk());
+
+        String secondEmail = "username-conflict-second@example.com";
+        String secondCode = requestDevelopmentCode(secondEmail);
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","username":"acha_","code":"%s","password":"correct-horse"}
+                    """.formatted(secondEmail, secondCode)))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("AUTH_USERNAME_REGISTERED"));
+    }
+
+    @Test
     void currentUserRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/users/me").header("X-Request-Id", "auth-api-test"))
             .andExpect(status().isUnauthorized())

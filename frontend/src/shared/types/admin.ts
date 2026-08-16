@@ -28,6 +28,7 @@ export type AdminUserStatus = "ACTIVE" | "DISABLED";
 export interface AdminUser {
   id: number;
   email: string;
+  username?: string | null;
   status: AdminUserStatus;
   disabledReason?: string | null;
   disabledAt?: IsoDateTime | null;
@@ -178,5 +179,67 @@ export interface UpdateModelConfigRequest {
 
 export interface ModelConfigConnectionTest {
   connected: boolean;
+  code: string;
+}
+
+export type MailSecurityMode = "NONE" | "STARTTLS" | "SSL";
+
+export type MailConfigCapabilityReason =
+  | "MASTER_KEY_UNAVAILABLE"
+  | "MAIL_CONFIG_UNAVAILABLE";
+
+export interface MailConfig {
+  siteName: string;
+  enabled: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  securityMode: MailSecurityMode;
+  smtpUsername: string;
+  smtpPasswordConfigured: boolean;
+  fromEmail: string;
+  fromName: string;
+  connectionTimeoutSeconds: number;
+  verificationTtlMinutes: number;
+  resendIntervalSeconds: number;
+  sessionTtlDays: number;
+  verificationSubject: string;
+  verificationTemplateHtml: string;
+  lastConnectionTestStatus?: string | null;
+  lastConnectionTestedAt?: IsoDateTime | null;
+  updatedAt?: IsoDateTime | null;
+}
+
+export interface MailConfigCapability {
+  available: boolean;
+  reason?: MailConfigCapabilityReason | string | null;
+  configuration?: MailConfig | null;
+}
+
+export interface UpdateMailConfigRequest {
+  siteName: string;
+  enabled: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  securityMode: MailSecurityMode;
+  smtpUsername: string;
+  smtpPassword?: string;
+  clearSmtpPassword: boolean;
+  fromEmail: string;
+  fromName: string;
+  connectionTimeoutSeconds: number;
+  verificationTtlMinutes: number;
+  resendIntervalSeconds: number;
+  sessionTtlDays: number;
+  verificationSubject: string;
+  verificationTemplateHtml: string;
+}
+
+export interface MailConnectionTest {
+  connected: boolean;
+  code: string;
+}
+
+export interface TestMailResult {
+  sent: boolean;
   code: string;
 }

@@ -43,6 +43,14 @@ public final class JwtTokenService {
     }
 
     public String issue(long userId, String email, Set<String> roles) {
+        return issue(userId, email, roles, ttl);
+    }
+
+    public String issue(long userId, String email, Set<String> roles, Duration requestedTtl) {
+        Duration effectiveTtl = requestedTtl == null ? ttl : requestedTtl;
+        if (effectiveTtl.isNegative() || effectiveTtl.isZero()) {
+            throw new IllegalArgumentException("token ttl must be positive");
+        }
         Instant now = clock.instant();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("iss", issuer);
@@ -50,7 +58,7 @@ public final class JwtTokenService {
         payload.put("email", email);
         payload.put("roles", roles.stream().sorted().toList());
         payload.put("iat", now.getEpochSecond());
-        payload.put("exp", now.plus(ttl).getEpochSecond());
+        payload.put("exp", now.plus(effectiveTtl).getEpochSecond());
 
         try {
             String encodedPayload = URL_ENCODER.encodeToString(objectMapper.writeValueAsBytes(payload));
@@ -59,6 +67,10 @@ public final class JwtTokenService {
         } catch (Exception error) {
             throw new IllegalStateException("Unable to create authentication token", error);
         }
+    }
+
+    public Duration defaultTtl() {
+        return ttl;
     }
 
     public AuthenticatedUser verify(String token) {

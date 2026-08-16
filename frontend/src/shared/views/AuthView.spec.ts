@@ -17,16 +17,16 @@ function createTestRouter() {
     history: createMemoryHistory(),
     routes: [
       { path: "/", component: { template: "<div>home</div>" } },
-      { path: "/login", component: { template: "<div>login</div>" } },
+      { path: "/login", component: AuthView, props: { mode: "login" } },
       { path: "/register", component: AuthView, props: { mode: "register" } },
       { path: "/reset-password", component: AuthView, props: { mode: "reset" } },
     ],
   });
 }
 
-async function mountAuth(mode: "register" | "reset") {
+async function mountAuth(mode: "login" | "register" | "reset") {
   const router = createTestRouter();
-  await router.push(mode === "register" ? "/register" : "/reset-password");
+  await router.push(mode === "login" ? "/login" : mode === "register" ? "/register" : "/reset-password");
   await router.isReady();
   return mount(AuthView, { props: { mode }, global: { plugins: [router] } });
 }
@@ -97,5 +97,21 @@ describe("verification-code auth flow", () => {
       code: "123456",
       password: "correct-horse-battery-staple",
     });
+  });
+
+  it("submits a username through the username login field without breaking email login compatibility", async () => {
+    authMock.login.mockResolvedValueOnce({ id: 1, email: "admin@example.com", roles: ["ADMIN"] });
+    const wrapper = await mountAuth("login");
+
+    const identifier = wrapper.get('input[autocomplete="username"]');
+    expect(identifier.attributes("type")).toBe("text");
+    expect(wrapper.get("label").text()).toContain("邮箱或用户名");
+
+    await identifier.setValue("ACha_");
+    await wrapper.get('input[type="password"]').setValue("correct-horse-battery-staple");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(authMock.login).toHaveBeenCalledWith({ username: "ACha_", password: "correct-horse-battery-staple" });
   });
 });

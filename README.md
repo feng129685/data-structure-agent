@@ -50,7 +50,7 @@ cd backend/spring
 
 后端环境变量、管理员初始化、知识库、编译器安全和部署说明见 [`backend/spring/README.md`](backend/spring/README.md)，冻结的接口契约见 [`contracts/openapi-v1.yaml`](contracts/openapi-v1.yaml)。
 
-生产学习站为 `https://structify.cn`，管理端统一使用 `https://admin.structify.cn`。完整的 Node 8791 / Spring 8792 / MySQL / Caddy 拓扑、私有教材和 PPT 路径、备份、迁移、健康检查、DNS 切换与回滚手册见 [`docs/production-deployment.md`](docs/production-deployment.md)。接口差异和数据模型差异分别见 [`docs/api-node-spring-differences.md`](docs/api-node-spring-differences.md) 与 [`docs/data-model-node-spring-differences.md`](docs/data-model-node-spring-differences.md)。Git 来源已恢复并核验：远程 `origin` 为 `https://github.com/feng129685/data-structure-agent.git`，截至本次核验 `origin/main` 为 `82b073790d28cffc47fbcbe500d111078d2660c3`（可用 `git ls-remote https://github.com/feng129685/data-structure-agent.git refs/heads/main` 复核）。当前工作区以该 revision 为基线但融合修改尚未提交，不能据此宣称生产线上版本等同；发布前必须创建并记录不可变 release commit/tag 和镜像摘要。
+生产学习站为 `https://structify.cn`，管理端统一使用 `https://admin.structify.cn`。完整的 Node 8791 / Spring 8792 / MySQL / Caddy 拓扑、私有教材和 PPT 路径、备份、迁移、健康检查、DNS 切换与回滚手册见项目根目录的 [`PRODUCTION_DEPLOYMENT_GUIDE.md`](PRODUCTION_DEPLOYMENT_GUIDE.md)；`docs/production-deployment.md` 仅是兼容入口。接口差异和数据模型差异分别见 [`docs/api-node-spring-differences.md`](docs/api-node-spring-differences.md) 与 [`docs/data-model-node-spring-differences.md`](docs/data-model-node-spring-differences.md)。Git 来源已恢复并核验：远程 `origin` 为 `https://github.com/feng129685/data-structure-agent.git`，截至本次核验 `origin/main` 为 `82b073790d28cffc47fbcbe500d111078d2660c3`（可用 `git ls-remote https://github.com/feng129685/data-structure-agent.git refs/heads/main` 复核）。当前工作区以该 revision 为基线但融合修改尚未提交，不能据此宣称生产线上版本等同；发布前必须创建并记录不可变 release commit/tag 和镜像摘要。
 
 ## 快速开始
 
@@ -147,7 +147,8 @@ data-structure-agent/
 | `docs/project/06-demo-script.md` | 展示脚本 |
 | `docs/project/09-iteration-report.md` | 迭代优化记录 |
 | `docs/project/13-cloudflare-deployment-guide.md` | Cloudflare 部署说明 |
-| `docs/production-deployment.md` | `structify.cn` 生产拓扑、备份、迁移、DNS 和回滚手册 |
+| `PRODUCTION_DEPLOYMENT_GUIDE.md` | `structify.cn` 生产发布唯一操作手册 |
+| `docs/production-deployment.md` | 兼容入口，跳转到根目录生产手册 |
 | `docs/api-node-spring-differences.md` | Node `/api/*` 与 Spring `/api/v1/*` 接口差异表 |
 | `docs/data-model-node-spring-differences.md` | SQLite 到 MySQL 数据模型和导入边界 |
 

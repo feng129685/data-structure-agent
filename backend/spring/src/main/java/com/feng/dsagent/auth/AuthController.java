@@ -1,5 +1,6 @@
 package com.feng.dsagent.auth;
 
+import com.feng.dsagent.common.ApiException;
 import com.feng.dsagent.security.SecurityProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -7,6 +8,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -47,7 +49,7 @@ public class AuthController {
         HttpServletRequest servletRequest
     ) {
         rateLimiter.checkCodeAttempt(request.email(), servletRequest.getRemoteAddr());
-        return authenticated(auth.register(request.email(), request.code(), request.password()));
+        return authenticated(auth.register(request.email(), request.username(), request.code(), request.password()));
     }
 
     @PostMapping("/login")
@@ -55,8 +57,9 @@ public class AuthController {
         @Valid @RequestBody LoginRequest request,
         HttpServletRequest servletRequest
     ) {
-        rateLimiter.checkLogin(request.email(), servletRequest.getRemoteAddr());
-        return authenticated(auth.login(request.email(), request.password()));
+        String identity = request.identifier();
+        rateLimiter.checkLogin(identity, servletRequest.getRemoteAddr());
+        return authenticated(auth.login(identity, request.password()));
     }
 
     @PostMapping("/reset-password")
@@ -86,7 +89,7 @@ public class AuthController {
             .secure(security.cookieSecure())
             .sameSite("Strict")
             .path("/")
-            .maxAge(security.tokenTtl())
+            .maxAge(session.tokenTtl())
             .build();
         return ResponseEntity.ok()
             .header(HttpHeaders.SET_COOKIE, cookie.toString())
@@ -98,15 +101,30 @@ public class AuthController {
 
     public record RegisterRequest(
         @Email @NotBlank String email,
+        @Size(max = 32) String username,
         @NotBlank @Size(min = 6, max = 6) String code,
         @NotBlank @Size(min = 8, max = 128) String password
     ) {
     }
 
     public record LoginRequest(
-        @Email @NotBlank String email,
+        @Size(max = 254) String email,
+        @Size(max = 32) String username,
         @NotBlank @Size(max = 128) String password
     ) {
+
+        String identifier() {
+            boolean hasEmail = email != null && !email.isBlank();
+            boolean hasUsername = username != null && !username.isBlank();
+            if (hasEmail == hasUsername) {
+                throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "AUTH_LOGIN_IDENTIFIER_INVALID",
+                    "请提供邮箱或用户名之一"
+                );
+            }
+            return hasUsername ? username : email;
+        }
     }
 
     public record ResetPasswordRequest(

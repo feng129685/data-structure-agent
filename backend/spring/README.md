@@ -54,6 +54,7 @@ Use [`deployment/.env.spring.example`](../../deployment/.env.spring.example) as 
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Verification-code mail delivery configuration. |
 | `SMTP_SSL`, `SMTP_STARTTLS`, `SMTP_STARTTLS_REQUIRED` | SMTP transport security. Use implicit TLS or required STARTTLS, not both. |
 | `SMTP_*_TIMEOUT_MS`, `SMTP_SSL_CHECK_SERVER_IDENTITY` | SMTP connection/read/write limits and TLS hostname verification; keep hostname verification enabled. |
+| `MODEL_CONFIG_MASTER_KEY`, `MAIL_CONFIG_MASTER_KEY` | Optional base64-encoded 32-byte AES keys for the encrypted administrator model and SMTP configuration pages. Keep them only in the external secret store. |
 | `PISTON_BASE_URL` | Piston service root. Production requires an explicit value. |
 | `EXECUTE_*` | Compiler timeout, input/output length, and concurrency limits. |
 
@@ -65,7 +66,7 @@ For implicit TLS, normally on port 465, set `SMTP_SSL=true`, `SMTP_STARTTLS=fals
 
 The complete `structify.cn` and `admin.structify.cn` deployment, including Caddy routing, Node 8791,
 Spring 8792, MySQL, private course/PPT paths, backups, smoke checks, and
-rollback is documented in [`docs/production-deployment.md`](../../docs/production-deployment.md).
+rollback is documented in [`PRODUCTION_DEPLOYMENT_GUIDE.md`](../../PRODUCTION_DEPLOYMENT_GUIDE.md).
 The executable Compose topology is [`deployment/docker-compose.production.yml`](../../deployment/docker-compose.production.yml).
 Use the deployment template only outside source control and keep the real file
 at `/etc/structify/structify.env` with mode `0600`.

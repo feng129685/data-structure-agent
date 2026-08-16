@@ -34,8 +34,23 @@ describe("AdminAuditView", () => {
       targetType: "USER",
       targetId: "42",
       from: new Date("2026-08-12T09:30").toISOString(),
-      to: new Date("2026-08-12T10:45").toISOString(),
+      to: new Date("2026-08-12T10:45:59.999").toISOString(),
     }));
     expect(inputs[1].attributes("maxlength")).toBe("64");
+  });
+
+  it("keeps the current event list and reports an invalid time range without calling the API", async () => {
+    const wrapper = mount(AdminAuditView);
+    await flushPromises();
+    const initialCalls = auditEvents.mock.calls.length;
+    const inputs = wrapper.findAll("input");
+    await inputs[4].setValue("2026-08-12T10:45");
+    await inputs[5].setValue("2026-08-12T09:30");
+
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(auditEvents).toHaveBeenCalledTimes(initialCalls);
+    expect(wrapper.text()).toContain("开始时间不能晚于结束时间");
   });
 });

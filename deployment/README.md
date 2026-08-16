@@ -1,161 +1,51 @@
 # Production deployment assets
 
-## 中文操作入口
+## Canonical runbook
 
-如果你看到 `<production-host>`、`<ssh-user>`、`<private-resource-root>` 或
-`<backup-root>`，这些不是脚本会自动发现的值：
+完整的生产发布流程只有一份：
+[`../PRODUCTION_DEPLOYMENT_GUIDE.md`](../PRODUCTION_DEPLOYMENT_GUIDE.md)。本文件是
+兼容入口和部署资产索引，不再维护第二套发布命令。
 
-- `<production-host>` 是服务器提供商/运维交接给你的 SSH 主机名或 IP，或已经在
-  Windows `known_hosts` 中验证过的 SSH alias；不能直接把 `structify.cn` 当成它。
-- `<ssh-user>` 是主机初始化时的 SSH 账号。`upload-release.ps1` 默认是
-  `ubuntu`，但该账号仍必须能无交互执行 `sudo -n true` 和 Docker Compose。
-- 生产环境文件默认在 Linux 主机的 `/etc/structify/structify.env`，不是仓库里的
-  `.env`，也不能复制进发布 ZIP；它必须是权限 `0600` 的真实文件。
-- 私有资源根默认是 `/srv/structify/private`，用于只读课程/知识/PPT/PDF 资源；
-  备份根默认是 `/var/backups/structify`，用于时间戳备份和发布回滚记录。两者都在
-  Linux 主机上，且都必须与 `/srv/structify/releases` 分开。
+## Current connection
 
-本次发布已确认的连接参数是：-HostName 49.232.245.99、-User ubuntu、-Port 22。
-初始密码不由脚本提供，必须从服务器提供商控制台、初始化交接信息或运维管理员处
-取得；没有密码且没有 SSH 私钥时，先通过云厂商控制台/VNC/串口控制台重置账号或
-安装 SSH 公钥。拿到密码后再按 runbook 的 DPAPI 流程交互式保存，上传脚本会自动
-读取本机凭据。
+- SSH host: `49.232.245.99`
+- SSH user: `ubuntu`
+- SSH port: `22`
+- Production environment: `/etc/structify/structify.env` (`0600`)
+- Private resources: `/srv/structify/private`
+- Backup root: `/var/backups/structify` (`0700` recommended)
+- Release root: `/srv/structify/releases`
 
-先阅读完整的中文参数说明和执行顺序：
-[`docs/project/14-production-release-runbook.md`](../docs/project/14-production-release-runbook.md)。
-该文档包含 Windows 变量模板、`ssh -G`/SSH 预检查、上传 dry-run、精确确认字符串，
-以及远端 `preflight.sh`、备份、`release.sh` 和 health/smoke 检查。所有变更脚本默认
-dry-run；只有同时提供 `--execute` 和脚本要求的 `--confirm` 才会产生变更。
+## One-time SSH credential
 
-The production targets are `https://structify.cn` for learning and
-`https://admin.structify.cn` for management. The default topology keeps an
-existing host Caddy in control of public TLS and routes both hosts to dedicated
-loopback ports:
+密码只需在执行上传的 Windows 账户上保存一次：
 
-```text
-Internet :443
-    -> existing host Caddy (structify.cn and admin.structify.cn)
-       /api/v1/*       -> Spring loopback :18792 (MySQL, Flyway)
-       /api/*          -> Node loopback :18791 (compatibility service)
-       /presentation/* -> Node loopback :18791 (JWT/HMAC check)
-       / and static    -> Node loopback :18791
-```
+~~~powershell
+.\deployment\scripts\upload-release.ps1 -HostName 49.232.245.99 -User ubuntu -Port 22 -SaveCredential
+~~~
 
-`CADDY_MODE=host` is the production default. It starts only MySQL, Node, and
-Spring, then requires the operator to import and validate
-[`Caddyfile.host.production`](Caddyfile.host.production) in the existing host
-Caddy configuration. Structify never binds public `80/443` in that mode. The
-`container` mode is available only for a dedicated host and explicitly starts
-the profiled Caddy service. Node and Spring bind the configurable loopback
-ports `18791` and `18792`; MySQL has no host port and is reachable only on the
-internal Compose network.
+命令会弹出安全输入框；按实际密码原样输入（包括末尾句点，如有）。凭据以 Windows
+DPAPI 形式保存到 `%LOCALAPPDATA%\Structify\credentials\production-ssh.xml`，后续
+上传自动读取。密码不是 `-Artifact`、`-Release` 或 `-HostName` 参数，也不会从仓库、
+ZIP 或生产环境文件读取。完全没有密码时，先通过云厂商控制台/VNC/串口控制台或运维
+管理员重置 `ubuntu` 密码或安装 SSH 公钥；脚本不能生成或找回未知密码。
 
-Container Caddy binds a stable host directory, CADDY_CONFIG_DIR_HOST
-(default /srv/structify/caddy), at /etc/caddy. It must remain outside
-versioned release directories. During a normal repeat deployment, deploy.sh
-confirms the existing container belongs to the same Compose project,
-atomically replaces that directory's Caddyfile, and reloads it in place. It
-does not run compose up caddy, so the current container retains 80/443.
-Before any Caddy container is created, deploy.sh also creates and validates
-the real `origin-ca` subdirectory below the stable bind. Docker needs that
-mountpoint to exist before it can overlay `/etc/caddy/origin-ca` inside the
-read-only `/etc/caddy` bind.
-The Caddy admin endpoint is bound only to 127.0.0.1:2019 inside the
-container; Compose does not publish it.
+## Asset index
 
-The first release after adopting this layout detects the old release-bound
-mount, or an older Caddy with admin off, and performs one controlled
-stop/remove/create sequence only after execute-time preflight has confirmed
-the existing Compose Caddy owns the public ports. That brief migration has an
-intentional listener interruption. An operator can intentionally recreate an
-otherwise healthy stable Caddy, for example after changing CADDY_IMAGE, with
-deploy.sh --refresh-caddy --execute --confirm REFRESH-CADDY-structify.cn;
-normal releases must not use this maintenance path.
+| Asset | Purpose |
+|---|---|
+| `docker-compose.production.yml` | Node、Spring、MySQL 和当前 container Caddy 拓扑 |
+| `Caddyfile.production` | 专用主机 Caddy 路由和 SSE 刷新策略 |
+| `Caddyfile.host.production` | 共享主机模式的显式 Caddy 交接配置 |
+| `Dockerfile.node` / `node-entrypoint.sh` | 非 root Node 镜像和 PDF 一次性种子 |
+| `scripts/upload-release.ps1` | Windows 校验、SCP 上传、远端 SHA-256 和 DPAPI 凭据读取 |
+| `scripts/preflight.sh` | Linux 环境、路径、内存、端口和 Caddy 门禁 |
+| `scripts/release.sh` | 唯一正常生产发布入口，委托构建、备份、迁移和健康检查 |
+| `scripts/backup.sh` / `restore.sh` | 备份和恢复 |
+| `scripts/health-check.sh` / `smoke.sh` | 回环和公网只读检查 |
+| `scripts/dns-check.sh` | DNS 可见性检查，不修改 DNS |
+| `scripts/rollback.sh` | 带镜像身份校验的应用回滚 |
 
-For a Cloudflare-proxied dedicated host, container Caddy supports either ACME
-or an operator-managed Cloudflare Origin CA certificate. Leave
-`ORIGIN_CERT_DIR_HOST` empty to keep ACME and provide `ACME_EMAIL`. To select
-Origin CA mode, set `ORIGIN_CERT_DIR_HOST` to an absolute, non-symlinked host
-directory with mode `0700`. It must contain `origin.crt` and an `origin.key`
-with mode `0600`; execute preflight verifies the pair and runs a networkless,
-read-only `caddy validate` using the same `CADDY_IMAGE` and mounts before
-Compose starts. Compose mounts the directory read-only at
-`/etc/caddy/origin-ca`, and Caddy uses the pair for `structify.cn`,
-`www.structify.cn`, and `admin.structify.cn`. Keep the certificate directory
-outside the repository and release bundle; the Origin CA certificate must
-include all three names. In Origin
-CA mode, `ACME_EMAIL` may be empty. This option applies only to container
-Caddy, not a separate host-managed Caddy installation.
-
-Host mode is an execute-time handoff, not merely a port choice. Set
-`HOST_CADDY_CONFIG` to the complete existing Caddyfile that imports
-`Caddyfile.host.production`; `preflight.sh --execute` runs `caddy validate`
-against that file before it invokes Docker. The default `low-memory` profile
-reads Linux `MemAvailable` and requires the larger of its configured budget and
-the 1,088 MiB service hard-cap total plus its 256 MiB host reserve (1,344 MiB).
-A host with another TLS owner must use an explicitly reviewed proxy integration
-or a dedicated Structify host; do not start the container-Caddy profile alongside it.
-
-The default build bases are the official Node 22 Bookworm and Eclipse Temurin
-21 images. When Docker Hub is unavailable, an operator may set
-`NODE_BASE_IMAGE`, `JAVA_BUILD_IMAGE`, and `JAVA_RUNTIME_IMAGE` in the private
-production environment file to a verified compatible mirror. Record the
-resolved digests with the release; do not add mirror credentials to source.
-
-PDF courseware stays outside the image build context. Set
-`PDF_SOURCE_DIR_HOST` to the absolute host directory that contains the
-reviewed PDFs for a release; Compose mounts it read-only at
-`/app/default-pdfs`. On the first Node boot for a new `node-pdfs` volume, the
-entrypoint copies non-conflicting source files into the writable volume and
-creates `.course-pdfs-seeded`. This marker is independent of the historical
-`.seeded` marker, so an existing volume receives the course-PDF baseline once
-when this source is introduced without overwriting user uploads. Later
-restarts never overwrite uploads or operator-managed files in that volume, so
-updating the source directory alone does not refresh an existing deployment.
-Ensure the source directory and its files are readable by the Node container
-user.
-
-Use [`../docs/production-deployment.md`](../docs/production-deployment.md) as
-the operator runbook. All operational scripts are under `scripts/` and are
-dry-run by default. Mutating actions require both `--execute` and an exact
-domain-specific `--confirm` value.
-
-Files:
-
-- `docker-compose.production.yml` - Node, Spring, MySQL, and optional profiled Caddy topology.
-- `Dockerfile.node` / `Dockerfile.node.dockerignore` / `node-entrypoint.sh` - non-root Node compatibility image; the build context allowlist excludes private media and databases, while the read-only PDF source is seeded once into a dedicated writable upload volume.
-- `Caddyfile.production` - dedicated-host container Caddy routes and SSE flush behavior for the learning and management hosts.
-- `Caddyfile.host.production` - append-only shared-host site blocks for `structify.cn` and `admin.structify.cn`.
-- `.env.spring.example` - placeholder-only production environment template.
-- `scripts/init-production-env.sh` - Linux-only secret-file generator; it
-  writes fresh database/JWT values outside the checkout, refuses overwrite,
-  and leaves optional model/SMTP/sandbox integrations disabled.
-- `scripts/preflight.sh` - local configuration and path checks.
-- `scripts/upload-release.ps1` - Windows-side SCP uploader with local/remote
-  SHA-256 verification, traversal-safe extraction, strict known-host checking,
-  and optional DPAPI-protected password authentication. It stages source only;
-  it never runs the production rollout.
-- `scripts/deploy.sh` - build, backup, Flyway-on-start, and service rollout.
-- `scripts/backup.sh` / `restore.sh` - MySQL, SQLite, and optional private-media snapshots.
-- `scripts/migrate-sqlite.sh` - read-only legacy audit and staging-only SQL generation.
-- `scripts/health-check.sh` / `smoke.sh` - loopback and public read-only checks.
-- `scripts/dns-check.sh` - DNS visibility check; it never changes DNS records.
-- `scripts/rollback.sh` - image-only rollback with explicit confirmation.
-
-This workspace has a verified `origin/main` source reference, but the current
-integration changes are intentionally uncommitted. Do not promote an image
-until the release operator creates and records an immutable release commit/tag,
-source revision, and artifact digest, and confirms that public-history and
-private-courseware checks have passed.
-
-The Spring rollout reuses Flyway V11 for DSVP evidence. Release verification
-must exercise both modes: a context-free request returns a non-persisted
-preview, while an authenticated source-verified request commits one linked
-animation/snapshot/event evidence unit with a non-null chapter. Do this only
-after a restore-tested backup and before DNS promotion.
-
-The legacy Node login bridge uses a dedicated `NODE_COMPAT_JWT_SECRET`; it is
-not the Spring `JWT_SECRET`. In host or container mode, Node receives only the
-compatibility key. Spring accepts it only when `NODE_COMPAT_ENABLED=true` and
-only on the restricted learning/animation evidence endpoints documented in the
-API difference matrix.
+所有变更脚本默认 dry-run；只有根手册列出的 `--execute` 和精确 `--confirm` 同时出现
+时才会产生变更。不要用 DPanel、工作树、`git reset`、`git clean` 或临时 Caddy 模式
+切换绕过门禁。

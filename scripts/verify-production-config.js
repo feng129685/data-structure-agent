@@ -165,6 +165,8 @@ function verifyOptionalDeploymentContract() {
   assert.match(compose, /MODEL_PROVIDER:\s+\$\{MODEL_PROVIDER:-\}/);
   assert.match(compose, /MODEL_BASE_URL:\s+\$\{MODEL_BASE_URL:-\}/);
   assert.match(compose, /MODEL_NAME:\s+\$\{MODEL_NAME:-\}/);
+  assert.match(compose, /MODEL_CONFIG_MASTER_KEY:\s+\$\{MODEL_CONFIG_MASTER_KEY:-\}/);
+  assert.match(compose, /MAIL_CONFIG_MASTER_KEY:\s+\$\{MAIL_CONFIG_MASTER_KEY:-\}/);
   assert.doesNotMatch(compose, /deepseek-v4-pro|https:\/\/api\.deepseek\.com/i);
   assert.match(compose, /SMTP_HOST:\s+\$\{SMTP_HOST:-\}/);
   assert.match(compose, /AUTH_MAIL_ENABLED:\s+\$\{AUTH_MAIL_ENABLED:-false\}/);
@@ -192,6 +194,8 @@ function verifyOptionalDeploymentContract() {
   assert.match(preflight, /for path_key in KNOWLEDGE_DIR_HOST RESOURCE_DIR_HOST PRESENTATION_DIR_HOST PDF_SOURCE_DIR_HOST; do/);
   assert.doesNotMatch(preflight, /AUTH_MAIL_ENABLED\)"\s*=~\s*\^\(true\|1\|yes\|on\)/);
   assert.match(preflight, /AUTH_MAIL_ENABLED/);
+  assert.match(preflight, /BOOTSTRAP_ADMIN_PROVISION_ENABLED/);
+  assert.match(preflight, /clear BOOTSTRAP_ADMIN_PROVISION_\* after successful startup/);
   assert.match(preflight, /caddy_mode/);
   assert.match(deploy, /host Caddy mode/);
   assert.match(deploy, /bootstrap data services/);
@@ -225,7 +229,10 @@ function verifyOptionalDeploymentContract() {
   assert.doesNotMatch(productionCaddy, /^\s*admin off\s*$/m);
   assert.match(hostCaddy, /header Origin https:\/\/admin\.structify\.cn/);
   assert.match(productionCaddy, /header Origin https:\/\/admin\.structify\.cn/);
-  assert.match(hostCaddy, /Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS"/);
+  assert.match(hostCaddy, /Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"/);
+  assert.match(hostCaddy, /admin\.structify\.cn\s*\{\s*@admin_root path \/\s*redir @admin_root \/admin 302/s);
+  assert.match(productionCaddy, /Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"/);
+  assert.match(productionCaddy, /admin\.structify\.cn\s*\{[\s\S]*@admin_root path \/[\s\S]*redir @admin_root \/admin 302/s);
   assert.doesNotMatch(hostCaddy, /Strict-Transport-Security/, "HSTS requires an explicit production decision");
   assert.doesNotMatch(productionCaddy, /Strict-Transport-Security/, "HSTS requires an explicit production decision");
   assert.match(productionApplication, /mail-enabled:\s+\$\{AUTH_MAIL_ENABLED:false\}/);
@@ -233,6 +240,10 @@ function verifyOptionalDeploymentContract() {
   assert.match(springApplication, /provider:\s+\$\{MODEL_PROVIDER:\}/);
   assert.match(springApplication, /base-url:\s+\$\{MODEL_BASE_URL:\}/);
   assert.match(springApplication, /name:\s+\$\{MODEL_NAME:\}/);
+  assert.match(springApplication, /enabled:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_ENABLED:false\}/);
+  assert.match(springApplication, /email:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_EMAIL:\}/);
+  assert.match(springApplication, /username:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_USERNAME:\}/);
+  assert.match(springApplication, /password:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_PASSWORD:\}/);
   assert.doesNotMatch(springApplication, /deepseek-v4-pro|https:\/\/api\.deepseek\.com/i);
   assert.doesNotMatch(nodeServer, /https:\/\/api\.deepseek\.com\/v1|deepseek-v4-pro/i);
   assert.match(nodeServer, /MODEL_PROVIDER = process\.env\.MODEL_PROVIDER \|\| \(MODEL_BASE_URL \? "openai-compatible" : "unconfigured"\)/);
@@ -244,9 +255,13 @@ function verifyOptionalDeploymentContract() {
   assert.match(nodeEntrypoint, /cp -R -n \/app\/default-pdfs\/\. \/app\/pdfs\//, "course PDFs must seed the writable volume without overwriting uploads");
   assert.match(nodeEntrypoint, /touch \/app\/pdfs\/\.course-pdfs-seeded/, "course PDF seed must record completion separately from the legacy marker");
   assert.match(nodeEntrypoint, /if \[ ! -e \/app\/pdfs\/\.seeded \]; then/, "legacy PDF marker behavior must remain available");
-  assert.match(nodeDockerfile, /npm ci --omit=dev --ignore-scripts=false/);
-  assert.doesNotMatch(nodeDockerfile, /apt-get\s+(?:update|install)/i, "Node dependencies must use published prebuilds rather than downloading a compiler toolchain");
-  assert.doesNotMatch(nodeDockerfile, /\b(?:python3|build-essential)\b/, "Node runtime image must not carry unused compiler dependencies");
+  assert.match(nodeDockerfile, /FROM \$\{NODE_BASE_IMAGE\} AS dependencies[\s\S]*apt-get install -y --no-install-recommends python3 make g\+\+/,
+    "the dependency-only stage must provide a native build fallback for better-sqlite3");
+  assert.match(nodeDockerfile, /npm_config_build_from_source=true npm ci --omit=dev --ignore-scripts=false/,
+    "native dependencies must compile deterministically instead of relying on a registry prebuild download");
+  const runtimeStage = nodeDockerfile.slice(nodeDockerfile.lastIndexOf("FROM ${NODE_BASE_IMAGE}"));
+  assert.doesNotMatch(runtimeStage, /apt-get\s+(?:update|install)|\b(?:python3|make|g\+\+)\b/i,
+    "the Node runtime image must not carry compiler dependencies");
   assert.match(nodeDockerfile, /ARG NODE_BASE_IMAGE=node:22-bookworm-slim/);
   assert.match(springDockerfile, /ARG JAVA_BUILD_IMAGE=eclipse-temurin:21-jdk/);
   assert.match(springDockerfile, /ARG JAVA_RUNTIME_IMAGE=eclipse-temurin:21-jre/);
@@ -262,6 +277,10 @@ function verifyOptionalDeploymentContract() {
   assert.match(compose, /mem_reservation:\s+\$\{SPRING_MEMORY_RESERVATION:-288m\}/);
   assert.match(compose, /mem_reservation:\s+\$\{CADDY_MEMORY_RESERVATION:-64m\}/);
   assert.match(compose, /NODE_OPTIONS:\s+"--max-old-space-size=\$\{NODE_MAX_OLD_SPACE_MB:-160\}"/);
+  assert.match(compose, /BOOTSTRAP_ADMIN_PROVISION_ENABLED:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_ENABLED:-false\}/);
+  assert.match(compose, /BOOTSTRAP_ADMIN_PROVISION_EMAIL:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_EMAIL:-\}/);
+  assert.match(compose, /BOOTSTRAP_ADMIN_PROVISION_USERNAME:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_USERNAME:-\}/);
+  assert.match(compose, /BOOTSTRAP_ADMIN_PROVISION_PASSWORD:\s+\$\{BOOTSTRAP_ADMIN_PROVISION_PASSWORD:-\}/);
   assert.match(productionEnv, /^HOST_CADDY_CONFIG=\/etc\/caddy\/Caddyfile$/m);
   assert.match(productionEnv, /^CORS_ALLOWED_ORIGINS=https:\/\/structify\.cn,https:\/\/admin\.structify\.cn$/m);
   assert.match(productionEnv, /^MODEL_PROVIDER=$/m);
@@ -285,6 +304,10 @@ function verifyOptionalDeploymentContract() {
   assert.match(productionEnv, /^CADDY_MEMORY_RESERVATION=64m$/m);
   assert.match(productionEnv, /^NODE_MAX_OLD_SPACE_MB=160$/m);
   assert.match(productionEnv, /^PDF_SOURCE_DIR_HOST=\/srv\/structify\/private\/pdfs$/m);
+  assert.match(productionEnv, /^BOOTSTRAP_ADMIN_PROVISION_ENABLED=false$/m);
+  assert.match(productionEnv, /^BOOTSTRAP_ADMIN_PROVISION_EMAIL=$/m);
+  assert.match(productionEnv, /^BOOTSTRAP_ADMIN_PROVISION_USERNAME=$/m);
+  assert.match(productionEnv, /^BOOTSTRAP_ADMIN_PROVISION_PASSWORD=$/m);
   assert.match(preflight, /HOST_CADDY_CONFIG is required in host Caddy mode/);
   assert.match(preflight, /ACME_EMAIL is required when ORIGIN_CERT_DIR_HOST is empty/);
   assert.match(preflight, /CADDY_CONFIG_DIR_HOST must be outside the release directory/);

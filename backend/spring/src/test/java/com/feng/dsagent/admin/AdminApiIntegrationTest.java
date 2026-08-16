@@ -118,6 +118,30 @@ class AdminApiIntegrationTest {
     }
 
     @Test
+    void adminUserViewsReturnAndSearchByUsername() throws Exception {
+        long adminId = seedUser("admin-username-view@example.com", "ACTIVE", "STUDENT", "TEACHER", "ADMIN");
+        long userId = seedUser("username-view@example.com", "ACTIVE", "STUDENT");
+        jdbc.update(
+            "UPDATE users SET username = ?, username_normalized = ? WHERE id = ?",
+            "ACha_",
+            "acha_",
+            userId
+        );
+
+        mockMvc.perform(get("/api/v1/admin/users?page=0&size=10&search=acha_")
+                .header("Authorization", bearer(adminId, "STUDENT", "TEACHER", "ADMIN")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.total").value(1))
+            .andExpect(jsonPath("$.items[0].id").value(userId))
+            .andExpect(jsonPath("$.items[0].username").value("ACha_"));
+
+        mockMvc.perform(get("/api/v1/admin/users/{id}", userId)
+                .header("Authorization", bearer(adminId, "STUDENT", "TEACHER", "ADMIN")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.username").value("ACha_"));
+    }
+
+    @Test
     void roleChangesAreAuditedAndPreserveTheBaselineStudentRole() throws Exception {
         long adminId = seedUser("admin-roles@example.com", "ACTIVE", "STUDENT", "TEACHER", "ADMIN");
         long studentId = seedUser("student-roles@example.com", "ACTIVE", "STUDENT");

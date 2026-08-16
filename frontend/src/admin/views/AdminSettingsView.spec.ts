@@ -240,7 +240,7 @@ describe("AdminSettingsView", () => {
     wrapper.unmount();
   });
 
-  it("tests the stored server configuration without sending the browser API key", async () => {
+  it("requires saving browser edits before testing the stored server configuration", async () => {
     getModelConfig.mockResolvedValue({ available: true, reason: null, configuration: storedConfig });
     testModelConnection.mockResolvedValue({ connected: true, code: "CONNECTED" });
     const { wrapper } = await mountView();
@@ -251,10 +251,25 @@ describe("AdminSettingsView", () => {
     await testButton.trigger("click");
     await flushPromises();
 
-    expect(testModelConnection).toHaveBeenCalledTimes(1);
-    expect(testModelConnection.mock.calls[0]).toHaveLength(0);
+    expect(testButton.attributes()).toHaveProperty("disabled");
+    expect(testModelConnection).not.toHaveBeenCalled();
     expect(updateModelConfig).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("当前表单有未保存的更改");
     expect(wrapper.text()).not.toContain("unsaved-browser-secret");
+    wrapper.unmount();
+  });
+
+  it("rejects out-of-range local generation controls before calling the API", async () => {
+    getModelConfig.mockResolvedValue({ available: true, reason: null, configuration: storedConfig });
+    const { wrapper } = await mountView();
+    await field(wrapper, "重试次数").setValue("7");
+
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(updateModelConfig).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("VALIDATION_ERROR");
+    expect(wrapper.text()).toContain("重试次数");
     wrapper.unmount();
   });
 });

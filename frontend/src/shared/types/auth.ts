@@ -6,6 +6,7 @@ export type AuthPurpose = "register" | "reset";
 export interface User {
   id: number;
   email: string;
+  username?: string | null;
   roles: Role[];
 }
 
@@ -25,7 +26,8 @@ export interface RegisterRequest {
 }
 
 export interface LoginRequest {
-  email: string;
+  email?: string;
+  username?: string;
   password: string;
 }
 

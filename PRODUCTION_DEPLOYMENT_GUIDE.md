@@ -49,8 +49,8 @@ SSH 密码、生产环境变量内容、数据库密码、模型 API Key、证�
 本次发布使用的镜像名必须是：
 
 ~~~text
-NODE_IMAGE=structify-node:v1.0.18-structify
-SPRING_IMAGE=structify-spring:v1.0.18-structify
+NODE_IMAGE=structify-node:v1.x.x-structify
+SPRING_IMAGE=structify-spring:v1.x.x-structify
 ~~~
 
 ## 职责和安全边界
@@ -147,8 +147,6 @@ previous-release.env。它必须位于 /srv/structify/releases 之外，并使�
    StrictHostKeyChecking=yes。
 4. 生产环境文件由秘密管理流程维护，真实文件权限为 0600，不能复制回仓库。
 5. 私有资源目录存在且能被 Node 容器用户读取；PPT、课程资源和 PDF 源以只读方式挂载。
-6. 低内存 profile 的可用内存门禁通过。默认服务硬上限为 1088 MiB，加上 256 MiB
-   主机 reserve，实际有效预算至少约 1344 MiB。不能降低门禁来强行发布。
 7. 需要邮件、模型或代码执行时，先完成对应外部服务配置；未配置时应用应明确返回
    不可用状态，而不是伪造成功。
 
@@ -174,47 +172,36 @@ SPRING_IMAGE；秘密、Compose 项目名、持久化路径和 Caddy 证书引�
 - JWT_SECRET 和 NODE_COMPAT_JWT_SECRET 都至少 64 个随机字符，且必须不同。
 - AUTH_COOKIE_SECURE=true，AUTH_EXPOSE_DEV_CODE=false。
 - BOOTSTRAP_ADMIN_EMAIL、TEACHER_EMAILS 为空，ALLOW_FIRST_USER_TEACHER=false。
+- `BOOTSTRAP_ADMIN_PROVISION_*` 默认全部为空；仅在一次性创建管理员时同时提供启用开关、邮箱、用户名和密码，创建成功后必须清空并重启 Spring 服务。
 - KNOWLEDGE_DEBUG_API=false，VERIFICATION_CODE_FILE 为空，
   KNOWLEDGE_AUTO_PUBLISH_LOCAL=false。
 - PDF_SOURCE_DIR_HOST 必须是绝对 Linux 路径，存在、可读，并包含审核过的 PDF。
 - AUTH_MAIL_ENABLED=true 之前必须完成 SMTP 交付测试。
 - MODEL_API_KEY、SMTP_PASS、数据库密码和 JWT 密钥只来自秘密管理器。
+- MODEL_CONFIG_MASTER_KEY、MAIL_CONFIG_MASTER_KEY 使用秘密管理器中的 Base64 32 字节密钥；未配置时对应管理页保持不可用，不会降级为明文存储。
 - PISTON_BASE_URL 和 JUDGE0_BASE_URL 为空时，代码执行能力应保持禁用。
 
-## 密码和 SSH 认证
+## 密码和 SSH 认证（只需一次）
 
-先区分两个动作：
-
-1. 获取初始密码：从服务器提供商的控制台/初始化交接信息、云厂商的重置页面，
-   或负责该主机的运维管理员处取得。这个动作发生在部署脚本之外。
-2. 保存已有密码：拿到密码后，才在将要执行上传的 Windows 账户上运行
-   -SaveCredential，把它转换成当前 Windows 账户可用的 DPAPI 凭据。
-
--SaveCredential 不能生成、查询或找回密码；它也不会读取服务器环境文件、Git 或
-ZIP。如果你既没有初始密码，也没有可用 SSH 私钥，不能继续上传，必须先通过云厂商
-网页控制台、VNC/串口控制台或管理员完成重置/密钥配置。通过主机控制台重置时，
-由管理员在主机上执行 passwd ubuntu，或安装审核过的 SSH 公钥；不要把新密码写进
-仓库或聊天记录。某些镜像会关闭 SSH 密码登录，此时应直接使用 SSH 私钥。
-
-拿到密码后，在本机运行：
+密码不是 `-Artifact`、`-Release` 或 `-HostName` 参数，脚本也不会从服务器、环境文件、
+Git 或 ZIP 读取。已拿到密码时，在将要执行上传的 Windows 账户上运行：
 
 ~~~powershell
 .\deployment\scripts\upload-release.ps1 -HostName 49.232.245.99 -User ubuntu -Port 22 -SaveCredential
 ~~~
 
-脚本会弹出安全输入提示。输入 SSH 密码后，凭据保存到：
+脚本会弹出安全输入提示；按原样输入密码（包括末尾句点，如有）。凭据会以 Windows
+DPAPI 形式保存到：
 
 ~~~text
 %LOCALAPPDATA%\Structify\credentials\production-ssh.xml
 ~~~
 
-后续上传会通过 SSH_ASKPASS 自动读取 DPAPI 凭据，不接受明文密码参数，也不打印
-密码。该文件绑定创建它的 Windows 用户和电脑；换账户、换电脑或文件损坏时，重新
-执行 -SaveCredential。忘记密码、账号锁定或认证失败时，只能通过服务器提供商或
-管理员重置。不要用 Import-Clixml、日志、截图或命令历史导出密码。
-
-SSH 私钥可替代密码流程。使用 -IdentityFile 时，私钥也不能加入仓库、发布包或
-聊天记录。
+后续上传通过 `SSH_ASKPASS` 自动读取该文件，不需要再次输入，也不能把密码写进命令行。
+文件只对创建它的 Windows 账户和电脑有效；换账户、换电脑或文件损坏时重新执行一次
+`-SaveCredential`。如果既没有密码也没有 SSH 私钥，先通过云厂商网页控制台、VNC/串口
+控制台或运维管理员重置 `ubuntu` 密码或安装公钥；脚本不能生成或找回未知密码。SSH 私钥
+可替代密码流程，但不能加入仓库、发布包或聊天记录。
 
 ## 完整发布流程
 
@@ -224,8 +211,8 @@ SSH 私钥可替代密码流程。使用 -IdentityFile 时，私钥也不能加�
 
 ~~~powershell
 $repo = "D:\Desktop\Study\数据结构智能体\data-structure-agent-main"
-$artifact = "D:\Desktop\Study\数据结构智能体\release-artifacts\structify-v1.0.18-structify.zip"
-$release = "v1.0.18-structify"
+$artifact = "D:\Desktop\Study\数据结构智能体\release-artifacts\structify-v1.x.x-structify.zip"
+$release = "v1.x.x-structify"
 $hostName = "49.232.245.99"
 $user = "ubuntu"
 $port = 22
@@ -518,14 +505,3 @@ uploads/**、node-pdfs 卷快照、review-records/**
 
 所有脚本的帮助信息以发布包中的实际版本为准；命令参数或确认字符串发生变化时，
 必须先同步本手册，再执行发布。
-
-## 本次发布记录
-
-本次发布使用 v1.0.18-structify，上传包 SHA-256 为：
-
-~~~text
-83ac03b70945b8d8aa9a6a49396227a124fe018a2728760b5767ef3e90a9b03f
-~~~
-
-部署后公网 smoke、回环健康、Caddy reload、镜像记录和回滚保留均已通过。密码没有
-写入本文档或仓库。

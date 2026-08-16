@@ -6,6 +6,7 @@ import AdminUsersView from "./AdminUsersView.vue";
 const listUser = {
   id: 7,
   email: "admin@example.edu",
+  username: "ACha_",
   status: "ACTIVE" as const,
   disabledReason: null,
   disabledAt: null,
@@ -53,7 +54,7 @@ describe("AdminUsersView", () => {
     const wrapper = mount(AdminUsersView);
     await flushPromises();
 
-    const search = wrapper.get("input[placeholder='按邮箱搜索']");
+    const search = wrapper.get("input[placeholder='按邮箱或用户名搜索']");
     await search.setValue("admin@example.edu");
     const selects = wrapper.findAll("form select");
     await selects[0].setValue("ACTIVE");
@@ -73,6 +74,8 @@ describe("AdminUsersView", () => {
     const wrapper = mount(AdminUsersView);
     await flushPromises();
 
+    expect(wrapper.text()).toContain("ACha_");
+
     const viewButton = wrapper.findAll("button").find((button) => button.text() === "查看");
     expect(viewButton).toBeDefined();
     await viewButton!.trigger("click");
@@ -80,5 +83,39 @@ describe("AdminUsersView", () => {
 
     expect(user).toHaveBeenCalledWith(7);
     expect(wrapper.get("aside[aria-label='用户详情']").text()).toContain("2026-08-12T09:45:00Z");
+  });
+
+  it("keeps every unsaved role toggle before submitting the public update", async () => {
+    updateUserRoles.mockResolvedValue({ ...detailUser, roles: ["ADMIN", "STUDENT", "TEACHER"] });
+    const wrapper = mount(AdminUsersView);
+    await flushPromises();
+
+    const roleCheckboxes = wrapper.findAll("input[type='checkbox']");
+    await roleCheckboxes[0].setValue(true);
+    await roleCheckboxes[1].setValue(true);
+    await flushPromises();
+
+    const saveButton = wrapper.findAll("button").find((button) => button.text() === "保存角色");
+    expect(saveButton).toBeDefined();
+    await saveButton!.trigger("click");
+    await flushPromises();
+
+    expect(updateUserRoles).toHaveBeenCalledWith(7, { roles: ["ADMIN", "STUDENT", "TEACHER"] });
+  });
+
+  it("refreshes the active filter after a successful user status update", async () => {
+    users.mockReset()
+      .mockResolvedValueOnce({ items: [listUser], page: 0, size: 20, total: 1 })
+      .mockResolvedValueOnce({ items: [], page: 0, size: 20, total: 0 });
+    updateUserStatus.mockResolvedValue({ ...detailUser, status: "DISABLED" });
+    const wrapper = mount(AdminUsersView);
+    await flushPromises();
+
+    const disable = wrapper.findAll("button").find((button) => button.text() === "禁用");
+    await disable!.trigger("click");
+    await flushPromises();
+
+    expect(users).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain("没有匹配用户");
   });
 });

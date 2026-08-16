@@ -2,6 +2,8 @@ package com.feng.dsagent.auth;
 
 import com.feng.dsagent.common.ApiException;
 import com.feng.dsagent.common.WindowRateLimiter;
+import com.feng.dsagent.mail.MailConfigService;
+import com.feng.dsagent.mail.MailPolicy;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
@@ -21,6 +23,7 @@ class DefaultVerificationCodeManager implements VerificationCodeManager {
     private final AuthProperties properties;
     private final VerificationCodeHasher hasher;
     private final Clock clock;
+    private final MailConfigService mailConfig;
     private final WindowRateLimiter requestLimiter = new WindowRateLimiter(3, Duration.ofMinutes(10));
 
     DefaultVerificationCodeManager(
@@ -28,12 +31,14 @@ class DefaultVerificationCodeManager implements VerificationCodeManager {
         VerificationCodeSender sender,
         AuthProperties properties,
         com.feng.dsagent.security.SecurityProperties securityProperties,
+        MailConfigService mailConfig,
         Clock clock
     ) {
         this.repository = repository;
         this.sender = sender;
         this.properties = properties;
         this.hasher = new VerificationCodeHasher(securityProperties.jwtSecret());
+        this.mailConfig = mailConfig;
         this.clock = clock;
     }
 
@@ -46,15 +51,21 @@ class DefaultVerificationCodeManager implements VerificationCodeManager {
         if (!requestLimiter.allow(normalizedEmail, now)) {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "AUTH_CODE_RATE_LIMITED", "验证码请求过于频繁");
         }
+        MailPolicy policy = mailConfig.policy();
+        if (repository.latestCreatedAt(normalizedEmail, normalizedPurpose)
+            .map(createdAt -> now.isBefore(createdAt.plus(policy.resendInterval())))
+            .orElse(false)) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "AUTH_CODE_RESEND_TOO_SOON", "验证码发送过于频繁，请稍后再试");
+        }
         String code = "%06d".formatted(RANDOM.nextInt(1_000_000));
         repository.save(
             normalizedEmail,
             normalizedPurpose,
             hasher.hash(normalizedEmail, normalizedPurpose, code),
-            now.plus(properties.verificationTtl())
+            now.plus(policy.verificationTtl())
         );
         sender.send(normalizedEmail, code, normalizedPurpose);
-        String developmentCode = properties.exposeDevelopmentCode() && !properties.mailEnabled() ? code : null;
+        String developmentCode = properties.exposeDevelopmentCode() && !mailConfig.deliveryEnabled() ? code : null;
         return new VerificationCodeDelivery("如果邮箱状态符合要求，验证码将发送到该邮箱", developmentCode);
     }
 

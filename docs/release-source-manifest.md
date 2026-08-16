@@ -13,4 +13,4 @@ The release source intentionally excludes private courseware and local state. Th
 - local production-input answers and generated design/planning notes
   (`docs/production-input-*.md` and `docs/superpowers/`)
 
-The release repository is initialized with fresh history so it does not inherit private-material objects from the legacy public repository. Production secrets, private presentation resources, database state, and Caddy data must be supplied through the server secret and backup procedures described in `docs/production-deployment.md`.
+The release repository is initialized with fresh history so it does not inherit private-material objects from the legacy public repository. Production secrets, private presentation resources, database state, and Caddy data must be supplied through the server secret and backup procedures described in `PRODUCTION_DEPLOYMENT_GUIDE.md`.

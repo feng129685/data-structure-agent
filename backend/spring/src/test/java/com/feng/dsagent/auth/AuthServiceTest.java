@@ -79,6 +79,32 @@ class AuthServiceTest {
             .isEqualTo("student@example.com");
     }
 
+    @Test
+    void logsInWithAUsernameWhileKeepingEmailLoginCompatible() {
+        AuthService service = service(new RolePolicy("", ""));
+        codes.allow("username@example.com", "register", "123456");
+
+        AuthSession registration = service.register("username@example.com", "ACha_", "123456", "correct-horse");
+
+        assertThat(registration.user().username()).isEqualTo("ACha_");
+        assertThat(service.login("acha_", "correct-horse").user().email()).isEqualTo("username@example.com");
+        assertThat(service.login("username@example.com", "correct-horse").user().username()).isEqualTo("ACha_");
+    }
+
+    @Test
+    void rejectsUsernameConflictsCaseInsensitively() {
+        AuthService service = service(new RolePolicy("", ""));
+        codes.allow("first@example.com", "register", "123456");
+        service.register("first@example.com", "ACha_", "123456", "correct-horse");
+        codes.allow("second@example.com", "register", "654321");
+
+        assertThatThrownBy(() -> service.register("second@example.com", "acha_", "654321", "correct-horse"))
+            .isInstanceOfSatisfying(ApiException.class, error -> {
+                assertThat(error.status()).isEqualTo(HttpStatus.CONFLICT);
+                assertThat(error.code()).isEqualTo("AUTH_USERNAME_REGISTERED");
+            });
+    }
+
     private void assertInvalidCredentials(Runnable action) {
         assertThatThrownBy(action::run)
             .isInstanceOfSatisfying(ApiException.class, error -> {
@@ -115,6 +141,7 @@ class AuthServiceTest {
 
     private static final class FakeUserRepository implements UserRepository {
         private final Map<String, UserAccount> byEmail = new LinkedHashMap<>();
+        private final Map<String, UserAccount> byUsername = new LinkedHashMap<>();
         private long nextId = 1;
 
         @Override
@@ -123,14 +150,22 @@ class AuthServiceTest {
         }
 
         @Override
+        public Optional<UserAccount> findByUsername(String normalizedUsername) {
+            return Optional.ofNullable(byUsername.get(normalizedUsername));
+        }
+
+        @Override
         public Optional<UserAccount> findById(long id) {
             return byEmail.values().stream().filter(user -> user.id() == id).findFirst();
         }
 
         @Override
-        public UserAccount create(String email, String passwordHash, Set<String> roles) {
-            UserAccount account = new UserAccount(nextId++, email.toLowerCase(), passwordHash, roles);
+        public UserAccount create(String email, String username, String passwordHash, Set<String> roles) {
+            UserAccount account = new UserAccount(nextId++, email.toLowerCase(), username, passwordHash, roles);
             byEmail.put(account.email(), account);
+            if (username != null) {
+                byUsername.put(UsernamePolicy.lookupKey(username), account);
+            }
             return account;
         }
 
@@ -141,8 +176,11 @@ class AuthServiceTest {
                 .findFirst()
                 .orElseThrow();
             byEmail.put(current.email(), new UserAccount(
-                current.id(), current.email(), passwordHash, current.roles()
+                current.id(), current.email(), current.username(), passwordHash, current.roles()
             ));
+            if (current.username() != null) {
+                byUsername.put(UsernamePolicy.lookupKey(current.username()), byEmail.get(current.email()));
+            }
         }
     }
 }

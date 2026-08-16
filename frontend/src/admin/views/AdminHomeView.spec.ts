@@ -13,6 +13,7 @@ const capabilities = vi.hoisted(() => vi.fn(async () => ({
     backgroundTasks: { available: true, status: "AVAILABLE" },
     audit: { available: true, status: "AVAILABLE" },
     modelSettings: { available: false, status: "NOT_CONFIGURED", reason: "NOT_CONFIGURED" },
+    mailSettings: { available: false, status: "UNAVAILABLE", reason: "MAIL_CONFIG_UNAVAILABLE" },
   },
 })));
 
@@ -31,6 +32,7 @@ describe("AdminHomeView", () => {
       { path: "/admin/tasks", component },
       { path: "/admin/audit", component },
       { path: "/admin/settings", component },
+      { path: "/admin/mail", component },
     ] });
     await router.push("/admin");
     await router.isReady();
@@ -38,8 +40,10 @@ describe("AdminHomeView", () => {
     await flushPromises();
 
     expect(capabilities).toHaveBeenCalledTimes(1);
-    expect(wrapper.text()).toContain("NOT_CONFIGURED");
+    expect(wrapper.text()).toContain("尚未完成服务端配置");
     expect(wrapper.get("a[href='/admin/settings']").text()).toContain("进入模型配置");
+    expect(wrapper.get("a[href='/admin/mail']").text()).toContain("进入邮件发送设置");
+    expect(wrapper.text()).toContain("邮件配置服务暂时不可用");
     expect(wrapper.text()).not.toMatch(/总用户|待审核|任务总数/);
   });
 });

@@ -11,6 +11,11 @@ import type {
   ModelConfig,
   ModelConfigCapability,
   ModelConfigConnectionTest,
+  MailConfig,
+  MailConfigCapability,
+  MailConnectionTest,
+  TestMailResult,
+  UpdateMailConfigRequest,
   ReviewDetail,
   ReviewHistoryEvent,
   ReviewItem,
@@ -56,6 +61,18 @@ export const adminApi = {
   },
   async testModelConnection(): Promise<ModelConfigConnectionTest> {
     return jsonData(await api.post<ModelConfigConnectionTest>("/admin/model-config/test"));
+  },
+  async getMailConfig(): Promise<MailConfigCapability> {
+    return jsonData(await api.get<MailConfigCapability>("/admin/mail-config"));
+  },
+  async updateMailConfig(payload: UpdateMailConfigRequest): Promise<MailConfig> {
+    return jsonData(await api.put<MailConfig>("/admin/mail-config", payload));
+  },
+  async testMailConnection(payload: UpdateMailConfigRequest): Promise<MailConnectionTest> {
+    return jsonData(await api.post<MailConnectionTest>("/admin/mail-config/test-connection", payload));
+  },
+  async sendTestMail(config: UpdateMailConfigRequest, recipient: string): Promise<TestMailResult> {
+    return jsonData(await api.post<TestMailResult>("/admin/mail-config/test-email", { config, recipient }));
   },
   async users(query: AdminQuery = {}): Promise<AdminUserPage> {
     return jsonData(await api.get<AdminUserPage>("/admin/users", { query: compactQuery(query) }));
