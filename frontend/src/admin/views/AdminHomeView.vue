@@ -85,16 +85,30 @@ onMounted(load);
     <EmptyState v-else-if="!capability" title="暂无能力数据" message="服务未返回管理模块状态，请稍后重试。"><RetryButton @retry="load" /></EmptyState>
 
     <template v-else>
-      <section class="admin-panel admin-motion-enter" aria-labelledby="service-status-title">
-        <div class="admin-panel__header">
-          <div><h2 id="service-status-title">服务状态</h2><p>版本：{{ capability.service.version }}</p></div>
-          <StatusBadge :label="capability.service.status === 'AVAILABLE' ? '服务可用' : '服务不可用'" :tone="capability.service.status === 'AVAILABLE' ? 'success' : 'danger'" />
+      <section class="admin-hero-rail admin-panel admin-panel--focus admin-motion-enter" aria-labelledby="service-status-title">
+        <span class="admin-hero-rail__index" aria-hidden="true"></span>
+        <div class="admin-hero-rail__body">
+          <div class="admin-hero-rail__heading">
+            <div>
+              <p class="admin-kicker">运行状态</p>
+              <h2 id="service-status-title">服务状态</h2>
+              <p>版本：{{ capability.service.version }}</p>
+            </div>
+            <StatusBadge :label="capability.service.status === 'AVAILABLE' ? '服务可用' : '服务不可用'" :tone="capability.service.status === 'AVAILABLE' ? 'success' : 'danger'" />
+          </div>
+          <dl class="admin-signal-grid" aria-label="服务摘要">
+            <div><dt>服务</dt><dd>{{ capability.service.status === 'AVAILABLE' ? '正常响应' : '需要处理' }}</dd></div>
+            <div><dt>模块</dt><dd>{{ modules.length }} 个管理入口</dd></div>
+            <div><dt>配置</dt><dd>以服务端状态为准</dd></div>
+          </dl>
         </div>
+        <span class="admin-hero-rail__pulse" :aria-label="capability.service.status === 'AVAILABLE' ? '服务可用' : '服务不可用'"></span>
       </section>
 
-      <section class="admin-module-rail" aria-label="管理模块">
+      <section class="admin-module-rail" aria-labelledby="admin-module-title">
         <header class="admin-section-head">
-          <h2>管理模块</h2>
+          <div><p class="admin-kicker">管理入口</p><h2 id="admin-module-title">管理模块</h2></div>
+          <span class="admin-section-head__count">{{ modules.length }} 个模块</span>
         </header>
         <div class="admin-rail-grid">
           <article v-for="item in modules" :key="item.key" class="admin-rail admin-motion-enter">

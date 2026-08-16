@@ -204,12 +204,26 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", warnBeforeUnloa
     <LoadingState v-if="loading" label="正在读取模型配置…" />
     <ErrorState v-else-if="error && !capability" title="模型配置不可读取" :message="error"><RetryButton @retry="load" /></ErrorState>
     <template v-else>
-      <div class="signal-strip" aria-label="模型配置状态">
-        <div class="signal-strip__item"><span class="signal-strip__label">服务状态</span><strong>{{ capability?.available ? "可用" : "未配置" }}</strong></div>
-        <div class="signal-strip__item"><span class="signal-strip__label">凭据状态</span><strong>{{ loadedConfig?.apiKeyConfigured ? "已加密" : "待配置" }}</strong></div>
-        <div class="signal-strip__item"><span class="signal-strip__label">最近测试</span><strong>{{ loadedConfig?.lastConnectionTestStatus || "未测试" }}</strong></div>
-        <div class="signal-strip__item"><span class="signal-strip__label">更新时间</span><strong>{{ formatDate(loadedConfig?.updatedAt) }}</strong></div>
-      </div>
+      <section class="admin-hero-rail admin-panel admin-motion-enter" aria-labelledby="model-configuration-status">
+        <span class="admin-hero-rail__index" aria-hidden="true"></span>
+        <div class="admin-hero-rail__body">
+          <div class="admin-hero-rail__heading">
+            <div>
+              <p class="admin-kicker">模型连接</p>
+              <h2 id="model-configuration-status">配置状态</h2>
+              <p>凭据仅在保存时发送到服务端，页面不会回填已保存的 API Key。</p>
+            </div>
+            <StatusBadge :label="capability?.available ? '可用' : '待配置'" :tone="capability?.available ? 'success' : 'warning'" />
+          </div>
+          <div class="signal-strip" aria-label="模型配置状态">
+            <div class="signal-strip__item"><span class="signal-strip__label">服务状态</span><strong>{{ capability?.available ? "可用" : "未配置" }}</strong></div>
+            <div class="signal-strip__item"><span class="signal-strip__label">凭据状态</span><strong>{{ loadedConfig?.apiKeyConfigured ? "已加密" : "待配置" }}</strong></div>
+            <div class="signal-strip__item"><span class="signal-strip__label">最近测试</span><strong>{{ loadedConfig?.lastConnectionTestStatus || "未测试" }}</strong></div>
+            <div class="signal-strip__item"><span class="signal-strip__label">更新时间</span><strong>{{ formatDate(loadedConfig?.updatedAt) }}</strong></div>
+          </div>
+        </div>
+        <span class="admin-hero-rail__pulse" :aria-label="capability?.available ? '模型配置可用' : '模型配置待处理'"></span>
+      </section>
       <InlineNotice v-if="capability?.reason" :message="reasonText(capability.reason)" :tone="capability.reason === 'NOT_CONFIGURED' ? 'warning' : capability.reason === 'MASTER_KEY_UNAVAILABLE' ? 'danger' : 'neutral'" />
       <InlineNotice v-if="dirtyConnection && loadedConfig?.apiKeyConfigured" message="服务提供方或服务地址已改变，保存前必须重新输入 API Key。" tone="warning" />
       <InlineNotice v-if="isDirty" message="当前表单有未保存的更改。连接测试只验证已保存的服务端配置，请先保存后再测试。" tone="warning" />
@@ -217,8 +231,8 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", warnBeforeUnloa
       <InlineNotice v-if="savedMessage" :message="savedMessage" tone="success" />
       <InlineNotice v-if="testMessage" :message="testMessage" :tone="testTone" />
       <section class="admin-panel admin-panel--focus panel-enter">
-        <div class="admin-panel__header"><div><h2>连接参数</h2><p>未配置时字段保持为空，不展示虚构的 provider 或模型名称。</p></div></div>
-        <form class="admin-form" @submit.prevent="save">
+        <div class="admin-panel__header"><div><p class="admin-kicker">编辑连接</p><h2>模型连接配置</h2><p>未配置时字段保持为空，不展示虚构的 provider 或模型名称。</p></div></div>
+        <form class="admin-form" aria-label="模型连接配置" @submit.prevent="save">
           <div class="admin-form__grid">
             <label class="admin-field"><span>服务提供方（Provider）</span><input v-model="form.provider" autocomplete="off" maxlength="128" required /></label>
             <label class="admin-field"><span>模型标识（Model ID）</span><input v-model="form.model" autocomplete="off" maxlength="512" required /></label>
@@ -235,7 +249,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", warnBeforeUnloa
         </form>
       </section>
       <section class="admin-panel admin-panel--quiet panel-enter" style="--panel-delay: 90ms">
-        <div class="admin-panel__header"><h2>运行边界</h2></div>
+        <div class="admin-panel__header"><div><p class="admin-kicker">安全与额度</p><h2>运行边界</h2></div></div>
         <div class="guardrail-grid"><div><span>凭据</span><strong>只在服务端加密存储</strong><small>API Key 不会被回填到表单。</small></div><div><span>额度</span><strong>{{ loadedConfig?.dailyTokenQuota ?? "未配置" }}</strong><small>每日 token 配额由后端结算。</small></div><div><span>变更时间</span><strong>{{ formatDate(loadedConfig?.updatedAt) }}</strong><small>所有保存动作进入管理员审计。</small></div></div>
       </section>
     </template>

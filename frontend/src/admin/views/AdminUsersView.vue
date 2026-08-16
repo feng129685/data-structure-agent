@@ -141,35 +141,46 @@ onMounted(load);
     <ErrorState v-else-if="error" title="用户列表读取失败" :message="error"><RetryButton @retry="load" /></ErrorState>
     <EmptyState v-else-if="!items.length" title="没有匹配用户" message="当前筛选条件没有返回用户记录。" />
 
-    <section v-else class="admin-data-surface admin-table-wrap admin-motion-enter" aria-label="用户列表">
-      <header class="admin-data-surface__head">
-        <div><p class="admin-kicker">用户索引</p><h2>用户状态流</h2></div>
-        <span class="admin-data-surface__hint">服务端保护 · 最后管理员不可自禁用</span>
-      </header>
-      <table class="admin-table admin-data-table">
-        <thead><tr><th>用户</th><th>状态</th><th>角色</th><th>创建时间</th><th>操作</th></tr></thead>
-        <tbody>
-          <tr v-for="user in items" :key="user.id" class="admin-data-row" :data-selected="selected?.id === user.id">
-            <td><div class="admin-identity"><span class="admin-identity__signal" aria-hidden="true"></span><div><strong>{{ user.username || user.email }}</strong><div class="admin-muted admin-code">{{ user.username ? user.email : `#${user.id}` }}</div></div></div></td>
-            <td><StatusBadge :label="user.status" :tone="user.status === 'ACTIVE' ? 'success' : 'warning'" /><div v-if="user.disabledReason" class="admin-muted admin-data-note">{{ user.disabledReason }}</div></td>
-            <td><div class="admin-checks admin-role-cluster"><label v-for="role in ['STUDENT','TEACHER','ADMIN'] as Role[]" :key="role" class="admin-check"><input type="checkbox" :disabled="actionBusy !== null" :checked="(selected?.id === user.id ? rolesDraft : user.roles).includes(role)" @change="selectUser(user); toggleRole(role)" /><span>{{ role }}</span></label></div></td>
-            <td class="admin-code admin-nowrap">{{ formatDate(user.createdAt) }}</td>
-            <td><div class="admin-table__actions admin-action-cluster"><button class="button button--small" type="button" :disabled="detailBusy || actionBusy !== null" @click="openUser(user)">查看</button><button class="button button--small" type="button" :disabled="actionBusy !== null" @click="changeStatus(user)">{{ user.status === 'ACTIVE' ? '禁用' : '启用' }}</button><button v-if="selected?.id === user.id" class="button button--small button--primary" type="button" :disabled="actionBusy !== null" @click="saveRoles(user)">保存角色</button></div></td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <template v-else>
+      <div class="signal-strip admin-motion-enter" aria-label="用户目录摘要">
+        <div class="signal-strip__item"><span class="signal-strip__label">记录总数</span><strong>{{ total }}</strong></div>
+        <div class="signal-strip__item"><span class="signal-strip__label">当前页</span><strong>{{ items.length }} 条记录</strong></div>
+        <div class="signal-strip__item"><span class="signal-strip__label">当前选择</span><strong>{{ selected ? "已选择用户" : "未选择" }}</strong></div>
+        <div class="signal-strip__item"><span class="signal-strip__label">权限变更</span><strong>服务端确认</strong></div>
+      </div>
 
-    <div class="admin-pagination admin-pagination--rail"><span class="admin-code">第 {{ page + 1 }} 页 · {{ total }} 条记录</span><div class="admin-pagination__actions"><button class="button button--small" type="button" :disabled="page === 0 || loading || actionBusy !== null" @click="page--; notice = ''; load({ clearCurrentSelection: true })">上一页</button><button class="button button--small" type="button" :disabled="(page + 1) * size >= total || loading || actionBusy !== null" @click="page++; notice = ''; load({ clearCurrentSelection: true })">下一页</button></div></div>
+      <div :class="{ 'data-rail': selected }">
+        <section class="admin-data-surface admin-table-wrap admin-motion-enter" aria-label="用户列表">
+          <header class="admin-data-surface__head">
+            <div><p class="admin-kicker">用户目录</p><h2>用户列表</h2></div>
+            <span class="admin-data-surface__hint">最后管理员保护由服务端执行</span>
+          </header>
+          <table class="admin-table admin-data-table">
+            <thead><tr><th>用户</th><th>状态</th><th>角色</th><th>创建时间</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="user in items" :key="user.id" class="admin-data-row" :data-selected="selected?.id === user.id">
+                <td><div class="admin-identity admin-nowrap"><span class="admin-identity__signal" aria-hidden="true"></span><div><strong :title="user.username || user.email">{{ user.username || user.email }}</strong><div class="admin-muted admin-code" :title="user.username ? user.email : `#${user.id}`">{{ user.username ? user.email : `#${user.id}` }}</div></div></div></td>
+                <td><StatusBadge :label="user.status" :tone="user.status === 'ACTIVE' ? 'success' : 'warning'" /><div v-if="user.disabledReason" class="admin-muted admin-data-note">{{ user.disabledReason }}</div></td>
+                <td><div class="admin-checks admin-role-cluster"><label v-for="role in ['STUDENT','TEACHER','ADMIN'] as Role[]" :key="role" class="admin-check"><input type="checkbox" :disabled="actionBusy !== null" :checked="(selected?.id === user.id ? rolesDraft : user.roles).includes(role)" @change="selectUser(user); toggleRole(role)" /><span>{{ role }}</span></label></div></td>
+                <td class="admin-code admin-nowrap">{{ formatDate(user.createdAt) }}</td>
+                <td><div class="admin-table__actions admin-action-cluster"><button class="button button--small" type="button" :disabled="detailBusy || actionBusy !== null" @click="openUser(user)">查看</button><button class="button button--small" type="button" :disabled="actionBusy !== null" @click="changeStatus(user)">{{ user.status === 'ACTIVE' ? '禁用' : '启用' }}</button><button v-if="selected?.id === user.id" class="button button--small button--primary" type="button" :disabled="actionBusy !== null" @click="saveRoles(user)">保存角色</button></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
 
-    <aside v-if="selected" class="admin-inspector admin-detail admin-motion-enter" aria-label="用户详情">
-      <div class="admin-detail__header admin-inspector__header"><div><p class="admin-kicker">用户详情</p><h2>用户详情</h2></div><button class="button button--small" type="button" @click="clearSelection">关闭</button></div>
-      <LoadingState v-if="detailBusy" label="正在读取用户详情…" />
-      <ErrorState v-else-if="detailError" title="用户详情读取失败" :message="detailError"><RetryButton @retry="openUser(selected)" /></ErrorState>
-      <template v-else>
-        <div class="admin-inspector__identity"><span class="admin-identity__signal" aria-hidden="true"></span><strong>{{ selected.username || selected.email }}</strong><StatusBadge :label="selected.status" :tone="selected.status === 'ACTIVE' ? 'success' : 'warning'" /></div>
-        <dl><dt>用户名</dt><dd>{{ selected.username || "未设置" }}</dd><dt>邮箱</dt><dd>{{ selected.email }}</dd><dt>状态</dt><dd>{{ selected.status }}</dd><dt>禁用时间</dt><dd>{{ formatDate(selected.disabledAt) }}</dd><dt>更新时间</dt><dd>{{ formatDate(selected.updatedAt) }}</dd></dl>
-      </template>
-    </aside>
+        <aside v-if="selected" class="admin-inspector admin-detail admin-motion-enter" aria-label="用户详情">
+          <div class="admin-detail__header admin-inspector__header"><div><p class="admin-kicker">当前选择</p><h2>用户详情</h2></div><button class="button button--small" type="button" @click="clearSelection">关闭</button></div>
+          <LoadingState v-if="detailBusy" label="正在读取用户详情…" />
+          <ErrorState v-else-if="detailError" title="用户详情读取失败" :message="detailError"><RetryButton @retry="openUser(selected)" /></ErrorState>
+          <template v-else>
+            <div class="admin-inspector__identity"><span class="admin-identity__signal" aria-hidden="true"></span><strong>{{ selected.username || selected.email }}</strong><StatusBadge :label="selected.status" :tone="selected.status === 'ACTIVE' ? 'success' : 'warning'" /></div>
+            <dl><dt>用户名</dt><dd>{{ selected.username || "未设置" }}</dd><dt>邮箱</dt><dd>{{ selected.email }}</dd><dt>状态</dt><dd>{{ selected.status }}</dd><dt>禁用时间</dt><dd>{{ formatDate(selected.disabledAt) }}</dd><dt>更新时间</dt><dd>{{ formatDate(selected.updatedAt) }}</dd></dl>
+          </template>
+        </aside>
+      </div>
+
+      <div class="admin-pagination admin-pagination--rail"><span class="admin-code">第 {{ page + 1 }} 页 · {{ total }} 条记录</span><div class="admin-pagination__actions"><button class="button button--small" type="button" :disabled="page === 0 || loading || actionBusy !== null" @click="page--; notice = ''; load({ clearCurrentSelection: true })">上一页</button><button class="button button--small" type="button" :disabled="(page + 1) * size >= total || loading || actionBusy !== null" @click="page++; notice = ''; load({ clearCurrentSelection: true })">下一页</button></div></div>
+    </template>
   </AdminPageFrame>
 </template>

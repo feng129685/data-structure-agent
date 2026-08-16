@@ -11,6 +11,7 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@paper-design/shaders": "^0.0.80",
     "vue": "^3.5.18",
     "vue-router": "^4.5.1"
   },

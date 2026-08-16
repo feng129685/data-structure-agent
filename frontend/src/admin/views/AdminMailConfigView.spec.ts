@@ -81,6 +81,16 @@ describe("AdminMailConfigView", () => {
     wrapper.unmount();
   });
 
+  it("uses the focused mail operations layout without the redundant status strip", async () => {
+    const wrapper = mount(AdminMailConfigView);
+    await flushPromises();
+
+    expect(wrapper.find(".mail-operations").exists()).toBe(true);
+    expect(wrapper.find(".signal-strip").exists()).toBe(false);
+    expect(wrapper.find("label.mail-toggle").text()).toContain("启用真实邮件发送");
+    wrapper.unmount();
+  });
+
   it("does not test changed SMTP identity with a password that only belongs to the saved identity", async () => {
     const wrapper = mount(AdminMailConfigView);
     await flushPromises();

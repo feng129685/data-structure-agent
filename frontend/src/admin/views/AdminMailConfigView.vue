@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { onBeforeRouteLeave } from "vue-router";
 import AdminPageFrame from "../components/AdminPageFrame.vue";
+import LiquidMetalButton from "../components/LiquidMetalButton.vue";
 import { adminApi, adminErrorMessage, formatDate } from "../api";
 import { auth } from "../../app/providers/runtime";
 import type { MailConfig, MailConfigCapability, MailSecurityMode, UpdateMailConfigRequest } from "../../shared/types";
@@ -346,7 +347,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", warnBeforeUnloa
 </script>
 
 <template>
-  <AdminPageFrame title="邮件发送控制" description="配置验证码邮件、认证策略和模板预览。SMTP 密码只在保存或测试时使用，不会返回到浏览器。">
+  <AdminPageFrame title="邮件设置" description="配置发件账户、验证码和邮件模板。">
     <template #actions>
       <StatusBadge :label="loadedConfig?.smtpPasswordConfigured ? '密码已配置' : '密码未配置'" :tone="loadedConfig?.smtpPasswordConfigured ? 'success' : 'neutral'" />
       <button class="button button--small" type="button" :disabled="loading || saving || testing || sending" @click="reload">重新读取</button>
@@ -362,18 +363,15 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", warnBeforeUnloa
       <InlineNotice v-if="testMessage" :message="testMessage" :tone="testTone" />
       <InlineNotice v-if="mailMessage" :message="mailMessage" :tone="mailTone" />
 
-      <div class="signal-strip" aria-label="邮件配置状态">
-        <div class="signal-strip__item"><span class="signal-strip__label">发送状态</span><strong>{{ form.enabled ? "已启用" : "已暂停" }}</strong></div>
-        <div class="signal-strip__item"><span class="signal-strip__label">凭据状态</span><strong>{{ loadedConfig?.smtpPasswordConfigured ? "已加密" : "待配置" }}</strong></div>
-        <div class="signal-strip__item"><span class="signal-strip__label">安全模式</span><strong>{{ form.securityMode }}</strong></div>
-        <div class="signal-strip__item"><span class="signal-strip__label">最近测试</span><strong>{{ loadedConfig?.lastConnectionTestStatus || "未测试" }}</strong></div>
-      </div>
-
-      <form class="mail-config" @submit.prevent="save">
-        <section class="mail-card mail-card--delivery panel-enter">
+      <form class="mail-config mail-operations" @submit.prevent="save">
+        <section class="mail-card mail-card--delivery">
           <header class="mail-card__header">
-            <div><h2>SMTP 投递</h2><p>支持密码保留或清除、连接测试，以及使用当前表单设置的测试。</p></div>
-            <label class="mail-switch"><input v-model="form.enabled" type="checkbox" /><span>启用真实邮件发送</span></label>
+            <div><h2>发送账户</h2><p>用于验证码和测试邮件投递。</p></div>
+            <label class="mail-toggle">
+              <input v-model="form.enabled" type="checkbox" />
+              <span class="mail-toggle__control" aria-hidden="true"><span></span></span>
+              <span>启用真实邮件发送</span>
+            </label>
           </header>
           <div class="mail-grid mail-grid--two">
             <label class="admin-field"><span>站点名称</span><input v-model="form.siteName" autocomplete="organization" maxlength="128" required /></label>
@@ -388,23 +386,25 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", warnBeforeUnloa
             <label class="admin-check mail-clear-password"><input v-model="form.clearSmtpPassword" name="clear-smtp-password" type="checkbox" :disabled="Boolean(form.smtpPassword)" /><span>清除当前 SMTP 密码</span></label>
           </div>
           <div class="mail-card__actions">
-            <button class="button button--primary" type="submit" :disabled="saving || testing || sending || capability?.reason === 'MASTER_KEY_UNAVAILABLE'">{{ saving ? "保存中…" : "保存 SMTP 设置" }}</button>
-            <button class="button" type="button" :disabled="saving || testing || sending" @click="testConnection">{{ testing ? "测试中…" : "测试连接" }}</button>
-            <span v-if="loadedConfig?.lastConnectionTestStatus" class="admin-muted">最近测试：{{ loadedConfig.lastConnectionTestStatus }} · {{ formatDate(loadedConfig.lastConnectionTestedAt) }}</span>
+            <span v-if="loadedConfig?.lastConnectionTestStatus" class="mail-last-test">最近测试：{{ loadedConfig.lastConnectionTestStatus }} · {{ formatDate(loadedConfig.lastConnectionTestedAt) }}</span>
+            <div class="mail-card__action-buttons">
+              <LiquidMetalButton variant="quiet" :disabled="saving || testing || sending" @click="testConnection">{{ testing ? "测试中…" : "测试连接" }}</LiquidMetalButton>
+              <LiquidMetalButton type="submit" :disabled="saving || testing || sending || capability?.reason === 'MASTER_KEY_UNAVAILABLE'">{{ saving ? "保存中…" : "保存设置" }}</LiquidMetalButton>
+            </div>
           </div>
         </section>
 
-        <section class="mail-card mail-card--policy panel-enter" style="--panel-delay: 70ms">
-          <header class="mail-card__header"><div><h2>验证码与会话</h2><p>调整验证码有效期、再次发送间隔和用户登录会话周期。</p></div></header>
-          <div class="mail-grid">
+        <section class="mail-card mail-card--policy">
+          <header class="mail-card__header"><div><h2>验证码策略</h2><p>控制验证与会话有效期。</p></div></header>
+          <div class="mail-grid mail-grid--policy">
             <label class="admin-field"><span>验证码有效期（分钟）</span><input v-model="form.verificationTtlMinutes" type="number" min="1" max="60" step="1" required /></label>
             <label class="admin-field"><span>再次发送间隔（秒）</span><input v-model="form.resendIntervalSeconds" type="number" min="5" max="3600" step="1" required /></label>
             <label class="admin-field"><span>登录会话周期（天）</span><input v-model="form.sessionTtlDays" type="number" min="1" max="90" step="1" required /></label>
           </div>
         </section>
 
-        <section class="mail-card mail-card--template panel-enter" style="--panel-delay: 140ms">
-          <header class="mail-card__header"><div><h2>验证码邮件模板</h2><p>可使用 <code v-pre>{{site_name}}</code>、<code v-pre>{{code}}</code>、<code v-pre>{{expires_minutes}}</code>。</p></div></header>
+        <section class="mail-card mail-card--template">
+          <header class="mail-card__header"><div><h2>验证码模板</h2><p>支持 <code v-pre>{{site_name}}</code>、<code v-pre>{{code}}</code>、<code v-pre>{{expires_minutes}}</code>。</p></div></header>
           <div class="mail-template-grid">
             <div class="mail-template-editor">
               <label class="admin-field"><span>邮件主题</span><input v-model="form.verificationSubject" maxlength="300" required /></label>
@@ -417,13 +417,12 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", warnBeforeUnloa
           </div>
         </section>
 
-        <section class="mail-card mail-card--test panel-enter" style="--panel-delay: 210ms">
-          <header class="mail-card__header"><div><h2>发送测试邮件</h2><p>使用当前表单中的 SMTP 和模板设置发送，不要求先保存。</p></div></header>
+        <section class="mail-card mail-card--test">
+          <header class="mail-card__header"><div><h2>测试投递</h2><p>使用当前设置发送到当前管理员邮箱。</p></div></header>
           <div class="mail-test-row">
             <label class="admin-field"><span>测试收件人</span><input v-model="testRecipient" type="email" :readonly="Boolean(actorEmail)" :placeholder="actorEmail || '当前管理员邮箱'" required /></label>
-            <button class="button button--primary" type="button" :disabled="saving || testing || sending || !testRecipient" @click="sendTestMail">{{ sending ? "发送中…" : "发送测试邮件" }}</button>
+            <LiquidMetalButton :disabled="saving || testing || sending || !testRecipient" @click="sendTestMail">{{ sending ? "发送中…" : "发送测试邮件" }}</LiquidMetalButton>
           </div>
-          <p class="mail-test-note">测试邮件仅允许发送到当前管理员邮箱。</p>
         </section>
       </form>
     </template>
@@ -431,43 +430,498 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", warnBeforeUnloa
 </template>
 
 <style scoped>
-.mail-config { display: grid; gap: 18px; }
-.mail-card { padding: 24px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow-sm); }
-.mail-card__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
-.mail-card__header h2 { margin: 0; font-size: clamp(24px, 3vw, 34px); line-height: 1.15; }
-.mail-card__header p:not(.mail-card__eyebrow) { max-width: 720px; margin: 10px 0 0; color: var(--text-muted); }
-.mail-card__eyebrow { margin: 0 0 8px; color: var(--accent); font: 700 12px/1.4 var(--font-mono); letter-spacing: .04em; }
-.mail-grid { display: grid; gap: 16px; margin-top: 22px; }
-.mail-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.mail-grid--two .mail-clear-password { align-self: end; }
-.admin-field small { color: var(--text-muted); font-size: 12px; }
-.mail-switch { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-subtle); color: var(--text); font-weight: 600; white-space: nowrap; }
-.mail-switch input, .mail-clear-password input { width: 18px; height: 18px; accent-color: var(--accent); }
-.mail-card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
-.mail-template-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr); gap: 18px; margin-top: 22px; }
-.mail-template-editor { display: grid; gap: 16px; }
-.mail-template-textarea { min-height: 360px !important; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; }
-.mail-preview { display: grid; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--line); background: var(--surface-subtle); }
-.mail-preview__subject { display: grid; gap: 4px; padding: 0 4px 8px; }
-.mail-preview__subject span { color: var(--text-muted); font-size: 12px; }
-.mail-preview__subject strong { overflow-wrap: anywhere; }
-.mail-preview__frame { width: 100%; min-height: 390px; border: 1px solid var(--line); background: var(--surface); }
-.mail-test-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; margin-top: 22px; }
-.mail-test-row .button { min-height: 44px; }
-.mail-test-note { margin: 12px 0 0; color: var(--text-muted); font-size: 13px; }
-code { padding: 2px 5px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-subtle); font-family: var(--font-mono); font-size: .9em; }
+:deep(.admin-page[data-admin-view="邮件设置"]) { animation: mail-page-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 
-/* Responsive layout only. Theme colors are inherited from the admin shell. */
-@media (max-width: 920px) {
-  .mail-template-grid { grid-template-columns: 1fr; }
-  .mail-preview__frame { min-height: 320px; }
+:deep(.admin-page[data-admin-view="邮件设置"] .admin-page__header) {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 18px 20px;
+  border: 1px solid rgba(35, 69, 76, 0.16);
+  border-top-color: rgba(255, 255, 255, 0.96);
+  border-right-color: rgba(226, 102, 151, 0.28);
+  border-bottom-color: rgba(65, 173, 132, 0.26);
+  border-left-color: rgba(57, 193, 221, 0.32);
+  border-radius: 8px;
+  background: linear-gradient(118deg, rgba(255, 255, 255, 0.82), rgba(249, 253, 252, 0.58) 48%, rgba(229, 244, 240, 0.48));
+  box-shadow: inset 1px 0 0 rgba(57, 193, 221, 0.2), inset -1px 0 0 rgba(226, 102, 151, 0.17), inset 0 1px 0 rgba(255, 255, 255, 0.98), 0 10px 26px rgba(32, 61, 65, 0.06);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
+  backdrop-filter: blur(18px) saturate(1.18);
 }
-@media (max-width: 680px) {
-  .mail-card { padding: 18px; }
-  .mail-card__header { display: grid; }
-  .mail-grid--two, .mail-test-row { grid-template-columns: 1fr; }
-  .mail-test-row .button { width: 100%; }
+
+:deep(.admin-page[data-admin-view="邮件设置"] .admin-page__header::before),
+:deep(.admin-page[data-admin-view="邮件设置"] .admin-page__header::after) {
+  position: absolute;
+  z-index: 0;
+  content: "";
+  pointer-events: none;
 }
-@media (prefers-reduced-transparency: reduce) { .mail-switch, .mail-preview { background: var(--surface); } }
-@media (prefers-contrast: more) { .mail-card, .mail-switch, .mail-preview__frame { border-color: var(--text); } }
+
+:deep(.admin-page[data-admin-view="邮件设置"] .admin-page__header::before) {
+  inset: 0;
+  background: linear-gradient(110deg, rgba(255, 255, 255, 0.54), transparent 42%, rgba(255, 255, 255, 0.24));
+}
+
+:deep(.admin-page[data-admin-view="邮件设置"] .admin-page__header::after) {
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(118deg, rgba(57, 193, 221, 0.62), rgba(255, 255, 255, 0.82) 30%, rgba(255, 255, 255, 0.12) 58%, rgba(226, 102, 151, 0.56));
+  opacity: 0.58;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+:deep(.admin-page[data-admin-view="邮件设置"] .admin-page__header > *) { position: relative; z-index: 1; }
+
+.mail-operations {
+  --mail-ink: #183036;
+  --mail-muted: #5d7076;
+  --mail-line: rgba(35, 69, 76, 0.16);
+  --mail-line-strong: rgba(29, 83, 91, 0.31);
+  --mail-cyan: rgba(57, 193, 221, 0.7);
+  --mail-rose: rgba(226, 102, 151, 0.62);
+  --mail-mint: rgba(65, 173, 132, 0.5);
+  --mail-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  display: grid;
+  gap: 14px;
+}
+
+.mail-operations .mail-card {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  min-width: 0;
+  gap: 18px;
+  overflow: hidden;
+  padding: 22px;
+  border: 1px solid var(--mail-line);
+  border-top-color: rgba(255, 255, 255, 0.96);
+  border-right-color: rgba(226, 102, 151, 0.3);
+  border-bottom-color: rgba(65, 173, 132, 0.28);
+  border-left-color: rgba(57, 193, 221, 0.34);
+  border-radius: 8px;
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, 0.82), rgba(249, 253, 252, 0.6) 48%, rgba(229, 244, 240, 0.5)),
+    rgba(255, 255, 255, 0.64);
+  box-shadow:
+    inset 1px 0 0 rgba(57, 193, 221, 0.24),
+    inset -1px 0 0 rgba(226, 102, 151, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 10px 26px rgba(32, 61, 65, 0.07);
+  -webkit-backdrop-filter: blur(18px) saturate(1.22);
+  backdrop-filter: blur(18px) saturate(1.22);
+  animation: mail-surface-in 200ms var(--mail-ease) both;
+}
+
+.mail-operations .mail-card::before,
+.mail-operations .mail-card::after {
+  position: absolute;
+  z-index: 0;
+  content: "";
+  pointer-events: none;
+}
+
+.mail-operations .mail-card::before {
+  inset: 0;
+  background: linear-gradient(112deg, rgba(255, 255, 255, 0.56), transparent 34%, rgba(255, 255, 255, 0.18) 62%, rgba(255, 255, 255, 0.44));
+  opacity: 0.72;
+}
+
+.mail-operations .mail-card::after {
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(118deg, var(--mail-cyan), rgba(255, 255, 255, 0.86) 29%, rgba(255, 255, 255, 0.12) 58%, var(--mail-rose));
+  opacity: 0.62;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+.mail-operations .mail-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mail-operations .mail-card--policy { animation-delay: 32ms; }
+.mail-operations .mail-card--template { animation-delay: 64ms; }
+.mail-operations .mail-card--test { animation-delay: 96ms; }
+
+.mail-operations .mail-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(35, 69, 76, 0.12);
+}
+
+.mail-operations .mail-card__header h2 {
+  margin: 0;
+  color: var(--mail-ink);
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  font-optical-sizing: auto;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+.mail-operations .mail-card__header p {
+  max-width: 680px;
+  margin: 6px 0 0;
+  color: var(--mail-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.mail-operations .mail-grid {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.mail-operations .mail-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mail-operations .mail-grid--policy { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mail-operations .mail-grid--two .mail-clear-password { align-self: end; }
+
+.mail-operations .admin-field {
+  gap: 7px;
+  color: var(--mail-muted);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.mail-operations .admin-field :is(input, select, textarea) {
+  min-height: 42px;
+  border-color: rgba(35, 69, 76, 0.19);
+  border-top-color: rgba(255, 255, 255, 0.94);
+  border-right-color: rgba(226, 102, 151, 0.2);
+  border-bottom-color: rgba(65, 173, 132, 0.2);
+  border-left-color: rgba(57, 193, 221, 0.24);
+  border-radius: 7px;
+  background:
+    linear-gradient(110deg, rgba(255, 255, 255, 0.78), rgba(246, 252, 250, 0.52)),
+    rgba(255, 255, 255, 0.52);
+  box-shadow:
+    inset 1px 0 0 rgba(57, 193, 221, 0.12),
+    inset -1px 0 0 rgba(226, 102, 151, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  color: var(--mail-ink);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease, transform 160ms var(--mail-ease);
+}
+
+.mail-operations .admin-field :is(input, select, textarea):hover { border-color: var(--mail-line-strong); }
+
+.mail-operations .admin-field :is(input, select, textarea):focus {
+  border-color: rgba(20, 117, 132, 0.72);
+  box-shadow: 0 0 0 3px rgba(48, 169, 191, 0.16), inset 1px 0 0 rgba(57, 193, 221, 0.22), inset -1px 0 0 rgba(226, 102, 151, 0.18);
+  transform: translateY(-1px);
+}
+
+.mail-operations .admin-field :is(input, select, textarea)[readonly] {
+  background: rgba(239, 245, 244, 0.8);
+  color: #66777b;
+}
+
+.mail-operations .admin-field small {
+  color: var(--mail-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.mail-operations .mail-toggle {
+  display: inline-flex;
+  align-items: center;
+  align-self: start;
+  min-height: 38px;
+  gap: 9px;
+  color: var(--mail-ink);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.mail-operations .mail-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.mail-operations .mail-toggle__control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 2px;
+  border: 1px solid rgba(35, 69, 76, 0.25);
+  border-radius: 999px;
+  background: rgba(232, 239, 238, 0.88);
+  box-shadow: inset 1px 0 0 rgba(57, 193, 221, 0.15), inset -1px 0 0 rgba(226, 102, 151, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.mail-operations .mail-toggle__control > span {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(23, 48, 54, 0.2), inset 1px 0 0 rgba(57, 193, 221, 0.2), inset -1px 0 0 rgba(226, 102, 151, 0.16);
+  transform: translateX(0);
+  transition: transform 180ms var(--mail-ease), box-shadow 180ms ease;
+}
+
+.mail-operations .mail-toggle input:checked + .mail-toggle__control {
+  border-color: rgba(10, 112, 99, 0.66);
+  background: linear-gradient(120deg, #168b84, #0c6963);
+  box-shadow: inset 1px 0 0 rgba(79, 232, 242, 0.64), inset -1px 0 0 rgba(255, 145, 192, 0.56), inset 0 1px 0 rgba(218, 255, 251, 0.46);
+}
+
+.mail-operations .mail-toggle input:checked + .mail-toggle__control > span {
+  transform: translateX(16px);
+  box-shadow: 0 1px 4px rgba(2, 62, 58, 0.28), inset 1px 0 0 rgba(255, 255, 255, 0.82);
+}
+
+.mail-operations .mail-toggle input:focus-visible + .mail-toggle__control { box-shadow: 0 0 0 3px rgba(48, 169, 191, 0.22); }
+
+.mail-operations .mail-clear-password {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  gap: 8px;
+  color: var(--mail-muted);
+  font-size: 13px;
+}
+
+.mail-operations .mail-clear-password input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: #0d746d;
+}
+
+.mail-operations .mail-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding-top: 15px;
+  border-top: 1px solid rgba(35, 69, 76, 0.12);
+}
+
+.mail-operations .mail-card__action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mail-operations .mail-last-test {
+  min-width: 0;
+  color: var(--mail-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.mail-operations .button {
+  border-top-color: rgba(255, 255, 255, 0.9);
+  border-right-color: rgba(226, 102, 151, 0.48);
+  border-bottom-color: rgba(65, 173, 132, 0.42);
+  border-left-color: rgba(57, 193, 221, 0.58);
+  --liquid-rim-cyan: rgba(57, 193, 221, 0.72);
+  --liquid-rim-pink: rgba(226, 102, 151, 0.68);
+  --liquid-rim-mint: rgba(65, 173, 132, 0.48);
+  --liquid-rim-gold: rgba(232, 179, 85, 0.42);
+  transition: transform 160ms var(--mail-ease), border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.mail-operations .button::after { opacity: 0.86; }
+
+.mail-operations .button--primary {
+  border-top-color: rgba(213, 255, 250, 0.76);
+  border-right-color: rgba(255, 145, 192, 0.78);
+  border-bottom-color: rgba(2, 70, 64, 0.92);
+  border-left-color: rgba(79, 232, 242, 0.88);
+}
+
+.mail-operations .mail-template-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.02fr) minmax(340px, 0.98fr);
+  gap: 20px;
+  min-width: 0;
+}
+
+.mail-operations .mail-template-editor { display: grid; min-width: 0; gap: 14px; }
+
+.mail-operations .mail-template-textarea {
+  min-height: 348px;
+  font-family: var(--admin-ui, system-ui, sans-serif);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.mail-operations .mail-preview {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.mail-operations .mail-preview__subject {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 0 2px 2px;
+}
+
+.mail-operations .mail-preview__subject span {
+  color: var(--mail-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mail-operations .mail-preview__subject strong {
+  color: var(--mail-ink);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.mail-operations .mail-preview__frame {
+  display: block;
+  width: 100%;
+  min-height: 360px;
+  box-sizing: border-box;
+  border: 1px solid rgba(35, 69, 76, 0.18);
+  border-top-color: rgba(255, 255, 255, 0.94);
+  border-right-color: rgba(226, 102, 151, 0.24);
+  border-bottom-color: rgba(65, 173, 132, 0.24);
+  border-left-color: rgba(57, 193, 221, 0.28);
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: inset 1px 0 0 rgba(57, 193, 221, 0.1), inset -1px 0 0 rgba(226, 102, 151, 0.1), 0 8px 20px rgba(32, 61, 65, 0.05);
+}
+
+.mail-operations .mail-test-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.mail-operations .mail-test-row .button { min-height: 42px; }
+.mail-operations :deep(.liquid-metal-button) { min-height: 42px; }
+
+.mail-operations code {
+  padding: 1px 5px;
+  border: 1px solid rgba(35, 69, 76, 0.15);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--mail-ink);
+  font-family: var(--admin-ui, system-ui, sans-serif);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+@keyframes mail-surface-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.992); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes mail-page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mail-operations .mail-card {
+    transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms var(--mail-ease);
+    will-change: transform;
+  }
+
+  .mail-operations .mail-card:hover {
+    border-color: rgba(23, 108, 115, 0.28);
+    box-shadow: inset 1px 0 0 rgba(57, 193, 221, 0.32), inset -1px 0 0 rgba(226, 102, 151, 0.27), inset 0 1px 0 rgba(255, 255, 255, 0.98), 0 14px 28px rgba(32, 61, 65, 0.09);
+    transform: translateY(-1px);
+  }
+
+  .mail-operations .button:not(:disabled):hover { transform: translateY(-1px); }
+}
+
+@media (max-width: 980px) {
+  .mail-operations .mail-template-grid { grid-template-columns: 1fr; }
+  .mail-operations .mail-preview__frame { min-height: 320px; }
+}
+
+@media (max-width: 720px) {
+  .mail-operations .mail-card { padding: 18px; }
+  .mail-operations .mail-card__header { flex-direction: column; gap: 12px; }
+  .mail-operations .mail-grid--two,
+  .mail-operations .mail-grid--policy,
+  .mail-operations .mail-test-row { grid-template-columns: 1fr; }
+  .mail-operations .mail-card__actions { align-items: stretch; flex-direction: column; }
+  .mail-operations .mail-card__action-buttons { justify-content: stretch; }
+  .mail-operations .mail-card__action-buttons .button,
+  .mail-operations .mail-test-row .button,
+  .mail-operations :deep(.liquid-metal-button) { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :deep(.admin-page[data-admin-view="邮件设置"]) { animation: none; }
+
+  .mail-operations .mail-card,
+  .mail-operations .mail-card--policy,
+  .mail-operations .mail-card--template,
+  .mail-operations .mail-card--test {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+
+  .mail-operations .mail-toggle__control,
+  .mail-operations .mail-toggle__control > span,
+  .mail-operations .admin-field :is(input, select, textarea),
+  .mail-operations .button { transition: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :deep(.admin-page[data-admin-view="邮件设置"] .admin-page__header),
+  .mail-operations .mail-card,
+  .mail-operations .admin-field :is(input, select, textarea) {
+    background: #ffffff;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .mail-operations .mail-card::before,
+  .mail-operations .mail-card::after,
+  :deep(.admin-page[data-admin-view="邮件设置"] .admin-page__header::before),
+  :deep(.admin-page[data-admin-view="邮件设置"] .admin-page__header::after) { opacity: 0; }
+}
+
+@media (prefers-contrast: more) {
+  .mail-operations .mail-card,
+  .mail-operations .admin-field :is(input, select, textarea),
+  .mail-operations .mail-preview__frame { border-color: #29444a; }
+}
 </style>

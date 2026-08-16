@@ -99,28 +99,39 @@ onMounted(load);
     <ErrorState v-else-if="error" title="审计日志读取失败" :message="error"><RetryButton @retry="load" /></ErrorState>
     <EmptyState v-else-if="!items.length" title="暂无审计记录" message="当前筛选条件没有返回审计事件。" />
 
-    <section v-else class="admin-data-surface admin-table-wrap admin-motion-enter" aria-label="审计日志">
-      <header class="admin-data-surface__head"><div><p class="admin-kicker">不可变记录</p><h2>操作时间轴</h2></div><span class="admin-data-surface__hint">仅显示摘要，不展开请求正文</span></header>
-      <table class="admin-table admin-data-table admin-audit-table">
-        <thead><tr><th>时间</th><th>操作与目标</th><th>结果</th><th>安全摘要</th><th>请求 ID</th></tr></thead>
-        <tbody>
-          <tr v-for="event in items" :key="event.id" class="admin-data-row">
-            <td class="admin-code admin-nowrap">{{ formatDate(event.createdAt) }}</td>
-            <td><div class="admin-record"><span class="admin-record__index admin-code">#{{ event.id }}</span><div><strong>{{ event.action }}</strong><div class="admin-muted">{{ event.targetType }} · {{ event.targetId }} · 操作者 #{{ event.actorUserId }}</div></div></div></td>
-            <td><span class="admin-result-mark" aria-hidden="true">●</span>{{ event.result }}</td>
-            <td><button class="button button--small admin-action-button" type="button" @click="selected = event">查看摘要<span aria-hidden="true">↗</span></button></td>
-            <td class="admin-code admin-nowrap">{{ event.requestId }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <template v-else>
+      <div class="signal-strip admin-motion-enter" aria-label="审计日志摘要">
+        <div class="signal-strip__item"><span class="signal-strip__label">事件总数</span><strong>{{ total }}</strong></div>
+        <div class="signal-strip__item"><span class="signal-strip__label">当前页</span><strong>{{ items.length }} 条事件</strong></div>
+        <div class="signal-strip__item"><span class="signal-strip__label">筛选条件</span><strong>{{ filterError ? "需要修正" : "有效" }}</strong></div>
+        <div class="signal-strip__item"><span class="signal-strip__label">记录内容</span><strong>仅安全摘要</strong></div>
+      </div>
 
-    <div class="admin-pagination admin-pagination--rail"><span class="admin-code">第 {{ page + 1 }} 页 · {{ total }} 条事件</span><div class="admin-pagination__actions"><button class="button button--small" type="button" :disabled="page === 0 || loading" @click="page--; load({ clearCurrentSelection: true })">上一页</button><button class="button button--small" type="button" :disabled="(page + 1) * size >= total || loading" @click="page++; load({ clearCurrentSelection: true })">下一页</button></div></div>
+      <div :class="{ 'data-rail': selected }">
+        <section class="admin-data-surface admin-table-wrap admin-motion-enter" aria-label="审计日志">
+          <header class="admin-data-surface__head"><div><p class="admin-kicker">不可变记录</p><h2>审计事件</h2></div><span class="admin-data-surface__hint">仅显示摘要，不展开请求正文</span></header>
+          <table class="admin-table admin-data-table admin-audit-table">
+            <thead><tr><th>时间</th><th>操作与目标</th><th>结果</th><th>安全摘要</th><th>请求 ID</th></tr></thead>
+            <tbody>
+              <tr v-for="event in items" :key="event.id" class="admin-data-row" :data-selected="selected?.id === event.id">
+                <td class="admin-code admin-nowrap">{{ formatDate(event.createdAt) }}</td>
+                <td><div class="admin-record"><span class="admin-record__index admin-code">#{{ event.id }}</span><div><strong>{{ event.action }}</strong><div class="admin-muted">{{ event.targetType }} · {{ event.targetId }} · 操作者 #{{ event.actorUserId }}</div></div></div></td>
+                <td><span class="admin-result-mark" aria-hidden="true">●</span>{{ event.result }}</td>
+                <td><button class="button button--small admin-action-button" type="button" @click="selected = event">查看摘要<span aria-hidden="true">↗</span></button></td>
+                <td class="admin-code admin-nowrap">{{ event.requestId }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
 
-    <aside v-if="selected" class="admin-inspector admin-detail admin-motion-enter">
-      <div class="admin-detail__header admin-inspector__header"><div><p class="admin-kicker">事件摘要</p><h2>审计事件 #{{ selected.id }}</h2><p class="admin-code">{{ formatDate(selected.createdAt) }} · {{ selected.action }}</p></div><button class="button button--small" type="button" @click="selected = null">关闭</button></div>
-      <section class="admin-inspector__summary"><div><span class="admin-kicker">结果</span><strong>{{ selected.result }}</strong></div><div><span class="admin-kicker">操作者</span><strong>#{{ selected.actorUserId }}</strong></div><div><span class="admin-kicker">目标</span><strong>{{ selected.targetType }} · {{ selected.targetId }}</strong></div></section>
-      <dl><dt>变更前摘要</dt><dd>{{ selected.beforeSummary }}</dd><dt>变更后摘要</dt><dd>{{ selected.afterSummary }}</dd><dt>结果</dt><dd>{{ selected.result }}</dd><dt>Request ID</dt><dd class="admin-code">{{ selected.requestId }}</dd></dl>
-    </aside>
+        <aside v-if="selected" class="admin-inspector admin-detail admin-motion-enter" aria-label="审计事件摘要">
+          <div class="admin-detail__header admin-inspector__header"><div><p class="admin-kicker">当前事件</p><h2>审计事件 #{{ selected.id }}</h2><p class="admin-code">{{ formatDate(selected.createdAt) }} · {{ selected.action }}</p></div><button class="button button--small" type="button" @click="selected = null">关闭</button></div>
+          <section class="admin-inspector__summary"><div><span class="admin-kicker">结果</span><strong>{{ selected.result }}</strong></div><div><span class="admin-kicker">操作者</span><strong>#{{ selected.actorUserId }}</strong></div><div><span class="admin-kicker">目标</span><strong>{{ selected.targetType }} · {{ selected.targetId }}</strong></div></section>
+          <dl><dt>变更前摘要</dt><dd>{{ selected.beforeSummary }}</dd><dt>变更后摘要</dt><dd>{{ selected.afterSummary }}</dd><dt>结果</dt><dd>{{ selected.result }}</dd><dt>Request ID</dt><dd class="admin-code">{{ selected.requestId }}</dd></dl>
+        </aside>
+      </div>
+
+      <div class="admin-pagination admin-pagination--rail"><span class="admin-code">第 {{ page + 1 }} 页 · {{ total }} 条事件</span><div class="admin-pagination__actions"><button class="button button--small" type="button" :disabled="page === 0 || loading" @click="page--; load({ clearCurrentSelection: true })">上一页</button><button class="button button--small" type="button" :disabled="(page + 1) * size >= total || loading" @click="page++; load({ clearCurrentSelection: true })">下一页</button></div></div>
+    </template>
   </AdminPageFrame>
 </template>

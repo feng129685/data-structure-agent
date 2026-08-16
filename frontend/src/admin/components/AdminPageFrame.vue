@@ -13,7 +13,7 @@ defineProps<{ title: string; description: string }>();
         <div class="admin-page__actions"><slot name="actions" /></div>
       </div>
     </header>
-    <div class="admin-page__body"><slot /></div>
+    <div class="admin-page__body" :aria-label="title"><slot /></div>
   </section>
 </template>
 
