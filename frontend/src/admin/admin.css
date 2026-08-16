@@ -219,7 +219,6 @@
 .app-frame--admin .admin-menu-toggle {
   position: relative;
   isolation: isolate;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 40px;
@@ -243,6 +242,11 @@
   -webkit-backdrop-filter: blur(10px) saturate(1.12);
   backdrop-filter: blur(10px) saturate(1.12);
   transition: transform 120ms ease-out, box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.app-frame--admin .button,
+.app-frame--admin .admin-mobile-nav-layer__close {
+  display: inline-flex;
 }
 
 .app-frame--admin .button::before,
